@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.4.0
+// @version      0.4.1
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
 // @updateURL    https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -62,8 +62,11 @@
     const ref = root.querySelector('#people_panel_button, #notes_settings_button, [id^="chat_panel_button:"]');
     const bar = ref && ref.parentElement;
     if (!bar) return;
-    if (earlyLauncher.parentElement !== bar || earlyLauncher.nextSibling !== ref)
-      bar.insertBefore(earlyLauncher, ref);
+    // Keep the FF tab at the left edge beside other chat tabs (as LossXchange does).
+    const first = Array.from(bar.children).find(el => el !== earlyLauncher &&
+      (el.tagName === 'BUTTON' || (el.querySelector && el.querySelector('button')))) || ref;
+    if (earlyLauncher.parentElement !== bar || earlyLauncher.nextSibling !== first)
+      bar.insertBefore(earlyLauncher, first);
     earlyLauncher.setAttribute('data-ff-chat-tab', 'true');
   }
   mountEarlyLauncher();
@@ -91,7 +94,7 @@
   window.__FFSCOUTER_PERSONAL_LOSS_DESK__ = true;
 
   const BASE = 'https://ffscouter.com/api/v1/losses/seller';
-  const SCRIPT_VERSION = '0.4.0';
+  const SCRIPT_VERSION = '0.4.1';
   const SCRIPT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const GITHUB_REPO = 'https://github.com/E7t7t7/FFContractor';
   const KEY_STORAGE = 'ffscouter-loss-desk-key-v1';
