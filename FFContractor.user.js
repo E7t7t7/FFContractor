@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.3.3
+// @version      0.4.0
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
 // @updateURL    https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -32,26 +32,23 @@
   const earlyLauncher = document.createElement('button');
   earlyLauncher.id = 'ffcontractor-launcher';
   earlyLauncher.type = 'button';
-  earlyLauncher.textContent = '⚔ FF';
-  earlyLauncher.title = 'FFContractor v0.3.3';
+  earlyLauncher.textContent = '⚔';
+  earlyLauncher.title = 'FFContractor — Open loss contracts';
+  // Like LossXchange, this tab belongs to Torn's chat bar, not the page.
   earlyLauncher.style.cssText = [
-    'all:initial!important',
-    'display:block!important',
-    'position:fixed!important',
-    'top:225px!important',
-    'left:12px!important',
-    'padding:12px 14px!important',
-    'z-index:2147483647!important',
-    'background:#087da4!important',
-    'border:2px solid #bceeff!important',
-    'border-radius:10px!important',
-    'color:white!important',
-    'font:bold 15px sans-serif!important',
-    'box-shadow:0 4px 16px #0009!important',
-    'visibility:visible!important',
-    'opacity:1!important',
-    'pointer-events:auto!important',
-    'cursor:pointer!important'
+    'all:unset!important', 'box-sizing:border-box!important',
+    'display:inline-flex!important', 'align-items:center!important',
+    'justify-content:center!important', 'position:relative!important',
+    'flex:0 0 auto!important', 'width:51px!important',
+    'min-width:51px!important', 'height:46px!important',
+    'min-height:46px!important', 'margin:0 2px!important',
+    'padding:1px!important', 'border-radius:9px 9px 0 0!important',
+    'border:1px solid #3983a3!important',
+    'background:linear-gradient(180deg,#277eaa,#153349)!important',
+    'color:#fff!important', 'font:bold 24px/1 system-ui,sans-serif!important',
+    'z-index:5!important', 'opacity:1!important', 'visibility:visible!important',
+    'pointer-events:auto!important', 'cursor:pointer!important',
+    'touch-action:manipulation!important'
   ].join(';');
   let earlyLaunchAction = null;
   let earlyLaunchProblem = '';
@@ -60,17 +57,32 @@
     else alert(earlyLaunchProblem || 'FFContractor is still starting. Try again shortly.');
   };
   function mountEarlyLauncher() {
-    const parent = document.body || document.documentElement;
-    if (!parent) return;
-    const other = document.getElementById(earlyLauncher.id);
-    // Use the current element on SPA navigation; do not create duplicate buttons.
-    if (other && other !== earlyLauncher) other.remove();
-    if (earlyLauncher.parentNode !== parent) parent.appendChild(earlyLauncher);
+    const root = document.getElementById('chatRoot');
+    if (!root) return;
+    const ref = root.querySelector('#people_panel_button, #notes_settings_button, [id^="chat_panel_button:"]');
+    const bar = ref && ref.parentElement;
+    if (!bar) return;
+    if (earlyLauncher.parentElement !== bar || earlyLauncher.nextSibling !== ref)
+      bar.insertBefore(earlyLauncher, ref);
+    earlyLauncher.setAttribute('data-ff-chat-tab', 'true');
   }
   mountEarlyLauncher();
   if (document.readyState === 'loading')
     document.addEventListener('DOMContentLoaded', mountEarlyLauncher, {once:true});
-  setInterval(mountEarlyLauncher, 2500);
+  setInterval(mountEarlyLauncher, 1500);
+  // Handle Torn redrawing its chat bar on navigation.
+  function watchChatBar() {
+    if (!document.body || typeof MutationObserver !== 'function') return;
+    let pending = false;
+    new MutationObserver(() => {
+      if (pending) return;
+      pending = true;
+      setTimeout(() => { pending = false; mountEarlyLauncher(); }, 150);
+    }).observe(document.body, {childList:true, subtree:true});
+  }
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', watchChatBar, {once:true});
+  else watchChatBar();
 
   try {
   // TornPDA can inject inside the active game frame. Never bail out solely
@@ -79,7 +91,7 @@
   window.__FFSCOUTER_PERSONAL_LOSS_DESK__ = true;
 
   const BASE = 'https://ffscouter.com/api/v1/losses/seller';
-  const SCRIPT_VERSION = '0.3.3';
+  const SCRIPT_VERSION = '0.4.0';
   const SCRIPT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const GITHUB_REPO = 'https://github.com/E7t7t7/FFContractor';
   const KEY_STORAGE = 'ffscouter-loss-desk-key-v1';
@@ -128,17 +140,16 @@
   shadow.innerHTML = `
     <style>
       * { box-sizing:border-box; }
-      #bubble, #panel { font: 14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-      #bubble { pointer-events:auto; position:fixed; bottom:calc(150px + env(safe-area-inset-bottom, 0px)); left:12px; z-index:2;
-        height:48px; min-width:64px; padding:0 11px; border:1px solid #38a4c9; border-radius:15px; color:#edf9ff;
-        background:linear-gradient(155deg,#187ba1,#0e5576); box-shadow:0 5px 22px #0009; font-weight:900; font-size:14px; }
-      #bubble:focus-visible, button:focus-visible, input:focus-visible { outline:3px solid #ffb55a; outline-offset:2px; }
-      #panel { pointer-events:auto; color:#edf0f7; background:#18181d; border:1px solid #3c3d49; border-radius:18px;
-        box-shadow:0 14px 50px #000b; width:min(440px, calc(100vw - 16px));
-        height:min(65dvh, 730px); max-height:calc(100dvh - 225px); position:fixed;
-        left:8px; bottom:calc(210px + env(safe-area-inset-bottom, 0px)); display:none;
-        flex-direction:column; overflow:hidden; }
+      #scrim { position:fixed; inset:0; pointer-events:auto; background:rgba(0,0,0,.65); display:none; z-index:1; }
+      #scrim.open { display:block; }
+      #panel { font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+        pointer-events:auto; color:#edf0f7; background:#18181d; border:1px solid #3c3d49; border-radius:19px;
+        box-shadow:0 18px 64px #000c; position:fixed; z-index:2;
+        left:50%; top:46%; transform:translate(-50%,-50%);
+        width:min(440px,calc(100vw - 22px)); height:min(69dvh,760px);
+        max-height:calc(100dvh - 120px); display:none; flex-direction:column; overflow:hidden; }
       #panel.open { display:flex; }
+      button:focus-visible, input:focus-visible { outline:3px solid #ffb55a; outline-offset:2px; }
       .head { padding:13px 14px; flex-shrink:0; display:flex; gap:8px; align-items:center;
         border-bottom:1px solid #383943; background:#202025; }
       .head-main { flex:1; min-width:0; }
@@ -187,11 +198,10 @@
       .times span { color:#b8c4d6; font-size:11px; }
       .warn { color:#ffd38b; }
       .mono { font-variant-numeric:tabular-nums; }
-      @media (max-width:480px) { #panel { left:7px; right:7px; bottom:calc(210px + env(safe-area-inset-bottom, 0px));
-          width:calc(100vw - 14px); border-radius:16px; height:min(65dvh, 760px); max-height:calc(100dvh - 225px); } }
-      @media (max-height:650px) { #bubble { bottom:100px; } #panel { bottom:156px; height:calc(100dvh - 165px); max-height:calc(100dvh - 165px); } }
+      @media (max-width:480px) { #panel { width:calc(100vw - 24px); height:min(68dvh,740px); top:45%; } }
+      @media (max-height:650px) { #panel { top:46%; height:calc(100dvh - 90px); max-height:calc(100dvh - 90px); } }
     </style>
-    <button type="button" id="bubble" aria-label="Open FFScouter Loss Desk">⚔ FF</button>
+    <div id="scrim" aria-hidden="true"></div>
     <div id="panel" role="dialog" aria-label="FFScouter Loss Desk">
       <div class="head">
         <div class="head-main"><strong>FF<span style="color:#20b7e7">Scouter</span> Loss Desk</strong><div class="sub">Contracts • Payout tracking • Torn PDA</div></div>
@@ -208,6 +218,7 @@
       <div class="scroll" id="content"></div>
     </div>
   `;
+  const scrim = shadow.querySelector('#scrim');
   const panel = shadow.querySelector('#panel');
   const content = shadow.querySelector('#content');
   // The early launcher already exists. Keep one button and reveal the
@@ -227,7 +238,9 @@
     state.open = !!value;
     sessSet(SESSION_OPEN, state.open ? 'yes' : 'no');
     panel.classList.toggle('open', state.open);
-    bubble.textContent = state.open ? '− FF' : '⚔ FF';
+    scrim.classList.toggle('open', state.open);
+    bubble.textContent = state.open ? '✕' : '⚔';
+    bubble.setAttribute('aria-expanded', String(state.open));
     bubble.setAttribute('aria-label', state.open ? 'Minimize FFScouter Loss Desk' : 'Open FFScouter Loss Desk');
     if (state.open && state.key && (!state.loaded || Date.now() - state.lastSync > 15000)) void refreshAll();
   }
@@ -743,6 +756,8 @@
     if (tab) { state.tab = tab.dataset.tab; render(); }
   });
   earlyLaunchAction = () => setOpen(!state.open);
+  scrim.addEventListener('click', () => setOpen(false));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && state.open) setOpen(false); });
 
   // Counts down locally every second; claims are reverified by FFScouter, never by the clock.
   setInterval(() => {
@@ -793,20 +808,20 @@
   // Keep the launcher mounted without creating additional event listeners.
   setInterval(() => {
     if (!host.isConnected && document.documentElement) document.documentElement.appendChild(host);
-    if (!bubble.isConnected) (document.body || document.documentElement).appendChild(bubble);
+    mountEarlyLauncher();
   }, 2500);
-  console.info('[FFContractor] v' + SCRIPT_VERSION + ' launcher mounted');
+  console.info('[FFContractor] v' + SCRIPT_VERSION + ' chat tab initialized');
   void init().catch(e => {
     earlyLaunchAction = null;
     earlyLaunchProblem = 'FFContractor initialization failed: ' + (e && (e.message || String(e)));
-    earlyLauncher.textContent = 'FF ERROR';
+    earlyLauncher.textContent = '!';
     earlyLauncher.style.setProperty('background','#a02028','important');
     console.error('[FFContractor]', e);
   });
   } catch (e) {
     earlyLaunchAction = null;
     earlyLaunchProblem = 'FFContractor startup error: ' + (e && (e.message || String(e)));
-    earlyLauncher.textContent = 'FF ERROR';
+    earlyLauncher.textContent = '!';
     earlyLauncher.style.setProperty('background','#a02028','important');
     console.error('[FFContractor]', e);
   }
