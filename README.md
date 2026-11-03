@@ -1,3 +1,14 @@
+## v0.5.0 — Loss X-change-style bottom tab (2026-11-03)
+
+- Rebuilt launcher after examining the **public** Loss X-change integration design. The other project has a no-redistribution license, so FFContractor uses independent code.
+- The launcher is now a direct child of the Torn page body, fixed to the bottom edge, **not injected into Torn's React chat-bar DOM**.
+- When Torn's chat controls exist, FFContractor positions next to them using measured coordinates; otherwise it docks at the bottom-right edge just like the reference implementation.
+- Dashboard opens as a chat-style dark flyout above the tab, with no page-changing navigation.
+- Existing claims, payout ledger and GitHub updater are retained.
+- If you still see no FF tab after installing v0.5.0 and reloading Torn, capture **TornPDA → Dev Tools → Scripts** and any visible FFContractor console error. The experimental injection test can be disabled.
+
+**Status:** Source validated with JavaScript parsing and launcher bootstrapping in a minimal DOM test. On-device TornPDA rendering and live FFScouter claims are not yet verified.
+
 ## v0.4.2: visible chat tab fallback
 
 Previous versions required `#chatRoot` and could silently skip the launcher on some TornPDA views. v0.4.2 looks for Torn chat buttons globally, and provides a bottom-left chat-tab fallback whenever they cannot be found. The dashboard stays in a centered modal. Update your existing remote installation; disable the standalone diagnostic script after confirming it works.
@@ -49,7 +60,7 @@ Version 0.3.1 fixes launcher injection/visibility issues and passed simulated mo
 
 ## v0.4.1: chat-tab interface
 
-The FFContractor launcher now integrates with Torn's **#chatRoot** chat-control bar, positioned toward the left with the other tab icons. It **does not float over the main game**. Tapping it opens a centered dark modal above a dimmed Torn page. Close it using ✕, the backdrop, or Escape. The existing contract, claim, payout-ledger and GitHub-update functions remain in the modal.
+The FFContractor launcher is independent of Torn's chat-control DOM and docks beside the bottom controls, matching the chat-tab presentation. Tapping it opens a centered dark modal above a dimmed Torn page. Close it using ✕, the backdrop, or Escape. The existing contract, claim, payout-ledger and GitHub-update functions remain in the modal.
 
 If you previously installed the **FFContractor Injection Test** script, disable it now. It was a diagnostic only, not part of the loss desk. TornPDA's normal script updater will detect v0.4.1 from the original GitHub URL.
 
