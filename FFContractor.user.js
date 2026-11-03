@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.3.1
+// @version      0.3.2
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
 // @updateURL    https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -32,7 +32,7 @@
   window.__FFSCOUTER_PERSONAL_LOSS_DESK__ = true;
 
   const BASE = 'https://ffscouter.com/api/v1/losses/seller';
-  const SCRIPT_VERSION = '0.3.1';
+  const SCRIPT_VERSION = '0.3.2';
   const SCRIPT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const GITHUB_REPO = 'https://github.com/E7t7t7/FFContractor';
   const KEY_STORAGE = 'ffscouter-loss-desk-key-v1';
@@ -163,8 +163,40 @@
   `;
   const panel = shadow.querySelector('#panel');
   const content = shadow.querySelector('#content');
-  const bubble = shadow.querySelector('#bubble');
+  // Plain DOM launcher: unlike a shadow-root button, this can be inspected
+  // directly in TornPDA's browser dev tools and is less sensitive to CSS isolation.
+  shadow.querySelector('#bubble').remove();
+  const bubble = document.createElement('button');
+  bubble.type = 'button';
+  bubble.id = 'ffcontractor-launcher';
+  bubble.textContent = '⚔ FF';
   bubble.setAttribute('title', 'FFContractor v' + SCRIPT_VERSION + ' — tap to open');
+  bubble.setAttribute('aria-label', 'Open FFScouter Loss Desk');
+  bubble.style.cssText = [
+    'all:initial!important',
+    'display:flex!important',
+    'align-items:center!important',
+    'justify-content:center!important',
+    'position:fixed!important',
+    'left:12px!important',
+    'bottom:calc(153px + env(safe-area-inset-bottom, 0px))!important',
+    'width:73px!important',
+    'height:48px!important',
+    'border-radius:14px!important',
+    'border:2px solid #b9eaff!important',
+    'background:#076c92!important',
+    'color:#fff!important',
+    'box-shadow:0 5px 18px #000a!important',
+    'font:900 16px system-ui,-apple-system,sans-serif!important',
+    'z-index:2147483647!important',
+    'opacity:1!important',
+    'visibility:visible!important',
+    'pointer-events:auto!important',
+    'cursor:pointer!important',
+    'touch-action:manipulation!important'
+  ].join(';');
+  (document.body || document.documentElement).appendChild(bubble);
+
 
   function activeClaim() {
     return state.claims.find(c => c.state === 'active') ||
@@ -742,6 +774,7 @@
   // Keep the launcher mounted without creating additional event listeners.
   setInterval(() => {
     if (!host.isConnected && document.documentElement) document.documentElement.appendChild(host);
+    if (!bubble.isConnected) (document.body || document.documentElement).appendChild(bubble);
   }, 2500);
   console.info('[FFContractor] v' + SCRIPT_VERSION + ' launcher mounted');
   void init();
