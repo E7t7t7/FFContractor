@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.4.2
+// @version      0.5.0
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
 // @updateURL    https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -23,28 +23,31 @@
 (() => {
   'use strict';
 
-  // BOOTSTRAP: mount the button BEFORE parsing layout or reading storage.
-  // This mirrors the working one-button TornPDA injection diagnostic.
+
+  // Launcher is a direct child of <body>, as a Torn-style chat tab. It does NOT
+  // depend on TornPDA exposing Torn's chat button row. No borrowed source code.
   const earlyLauncher = document.createElement('button');
   earlyLauncher.id = 'ffcontractor-launcher';
   earlyLauncher.type = 'button';
+  earlyLauncher.title = 'FFContractor — Open FFScouter losses';
+  earlyLauncher.setAttribute('aria-label', 'Open FFScouter Loss Desk');
+  earlyLauncher.setAttribute('data-ff-launcher-version','0.5.0');
   earlyLauncher.textContent = '⚔';
-  earlyLauncher.title = 'FFContractor — Open loss contracts';
-  // Like LossXchange, this tab belongs to Torn's chat bar, not the page.
   earlyLauncher.style.cssText = [
-    'all:unset!important', 'box-sizing:border-box!important',
-    'display:inline-flex!important', 'align-items:center!important',
-    'justify-content:center!important', 'position:relative!important',
-    'flex:0 0 auto!important', 'width:51px!important',
-    'min-width:51px!important', 'height:46px!important',
-    'min-height:46px!important', 'margin:0 2px!important',
-    'padding:1px!important', 'border-radius:9px 9px 0 0!important',
-    'border:1px solid #3983a3!important',
-    'background:linear-gradient(180deg,#277eaa,#153349)!important',
-    'color:#fff!important', 'font:bold 24px/1 system-ui,sans-serif!important',
-    'z-index:5!important', 'opacity:1!important', 'visibility:visible!important',
-    'pointer-events:auto!important', 'cursor:pointer!important',
-    'touch-action:manipulation!important'
+    'all:initial!important', 'box-sizing:border-box!important',
+    'display:flex!important', 'align-items:center!important',
+    'justify-content:center!important', 'position:fixed!important',
+    'right:5px!important', 'left:auto!important', 'bottom:0!important',
+    'width:39px!important', 'height:39px!important',
+    'min-width:39px!important', 'min-height:39px!important',
+    'padding:0!important', 'margin:0!important',
+    'border-radius:6px 6px 0 0!important', 'border:1px solid #31647b!important',
+    'background:linear-gradient(#0a779d,#003c56)!important',
+    'box-shadow:inset 0 0 5px #ffffff30,0 -1px 8px #0005!important',
+    'color:#f5fbff!important', 'font:bold 24px/1 system-ui,sans-serif!important',
+    'visibility:visible!important', 'opacity:1!important',
+    'z-index:2147483647!important', 'pointer-events:auto!important',
+    'cursor:pointer!important', 'touch-action:manipulation!important'
   ].join(';');
   let earlyLaunchAction = null;
   let earlyLaunchProblem = '';
@@ -53,53 +56,57 @@
     else alert(earlyLaunchProblem || 'FFContractor is still starting. Try again shortly.');
   };
 
+
+  // Follow the left edge of Torn's chat controls *geometrically*, never by
+  // inserting our button into a React-managed DOM subtree.
+  function locateChatBarLeft() {
+    const chat = document.getElementById('chatRoot');
+    if (!chat) return null;
+    let buttons=[];
+    const hint = chat.querySelector('button[title="Settings"],button[title="Notes"],button[title="People"]');
+    if (hint && hint.parentElement) buttons=Array.from(hint.parentElement.querySelectorAll('button'));
+    else buttons=Array.from(chat.querySelectorAll('button')).filter(btn=>{
+      const r=btn.getBoundingClientRect();
+      return r.width>0 && r.top>=window.innerHeight-48 && r.bottom<=window.innerHeight+6;
+    });
+    const coords=buttons.map(btn=>btn.getBoundingClientRect()).filter(r=>r.width>0 && r.left>=0);
+    return coords.length?Math.min(...coords.map(r=>r.left)):null;
+  }
   function mountEarlyLauncher() {
-    const ref = document.getElementById('people_panel_button') ||
-      document.getElementById('notes_settings_button') ||
-      document.querySelector('[id^="chat_panel_button:"]');
-    const bar = ref && ref.parentElement;
-    if (bar) {
-      // Same global selector and sibling insertion pattern used by a working
-      // Torn chat-panel userscript; do not require a #chatRoot wrapper.
-      const first = Array.from(bar.children).find(el => el !== earlyLauncher &&
-        (el.tagName === 'BUTTON' || (el.querySelector && el.querySelector('button')))) || ref;
-      earlyLauncher.style.setProperty('position','relative','important');
-      earlyLauncher.style.setProperty('bottom','auto','important');
+    const container=document.body || document.documentElement;
+    if (!container) return;
+    if (earlyLauncher.parentNode !== container) container.appendChild(earlyLauncher);
+    const left=locateChatBarLeft();
+    // Match how chat-style tabs dock: left of the other tab buttons, or to the
+    // bottom-right edge in TornPDA when normal chat controls aren't available.
+    if (left == null) {
       earlyLauncher.style.setProperty('left','auto','important');
-      earlyLauncher.style.setProperty('z-index','30','important');
-      if (earlyLauncher.parentElement !== bar || earlyLauncher.nextSibling !== first) bar.insertBefore(earlyLauncher,first);
-      earlyLauncher.dataset.ffLauncherState = 'chat-tab';
-      return;
+      earlyLauncher.style.setProperty('right','5px','important');
+      earlyLauncher.dataset.ffLauncherState='bottom-edge';
+    } else {
+      earlyLauncher.style.setProperty('right','auto','important');
+      earlyLauncher.style.setProperty('left',Math.max(4,Math.round(left-43))+'px','important');
+      earlyLauncher.dataset.ffLauncherState='chat-aligned';
     }
-    // No chat controls in this WebView frame yet? Render a VISIBLE chat-style
-    // tab near the bottom toolbar instead of silently rendering nothing.
-    // If Torn creates chat controls later the next refresh moves this tab into them.
-    const parent = document.body || document.documentElement;
-    if (!parent) return;
-    earlyLauncher.style.setProperty('position','fixed','important');
-    earlyLauncher.style.setProperty('bottom','calc(91px + env(safe-area-inset-bottom,0px))','important');
-    earlyLauncher.style.setProperty('left','10px','important');
-    earlyLauncher.style.setProperty('z-index','2147483647','important');
-    if (earlyLauncher.parentElement !== parent) parent.appendChild(earlyLauncher);
-    earlyLauncher.dataset.ffLauncherState = 'bottom-tab-fallback';
   }
   mountEarlyLauncher();
   if (document.readyState === 'loading')
     document.addEventListener('DOMContentLoaded', mountEarlyLauncher, {once:true});
-  setInterval(mountEarlyLauncher, 1500);
-  // Handle Torn redrawing its chat bar on navigation.
-  function watchChatBar() {
+  setInterval(mountEarlyLauncher, 1600);
+  window.addEventListener('resize', mountEarlyLauncher);
+  // Recheck position when Torn rerenders; our button stays attached to <body>.
+  function observeChatPosition() {
     if (!document.body || typeof MutationObserver !== 'function') return;
-    let pending = false;
+    let queued=false;
     new MutationObserver(() => {
-      if (pending) return;
-      pending = true;
-      setTimeout(() => { pending = false; mountEarlyLauncher(); }, 150);
-    }).observe(document.body, {childList:true, subtree:true});
+      if (queued) return;
+      queued=true;
+      setTimeout(() => {queued=false;mountEarlyLauncher();},200);
+    }).observe(document.body,{childList:true,subtree:false});
   }
   if (document.readyState === 'loading')
-    document.addEventListener('DOMContentLoaded', watchChatBar, {once:true});
-  else watchChatBar();
+    document.addEventListener('DOMContentLoaded', observeChatPosition, {once:true});
+  else observeChatPosition();
 
   try {
   // TornPDA can inject inside the active game frame. Never bail out solely
@@ -108,7 +115,7 @@
   window.__FFSCOUTER_PERSONAL_LOSS_DESK__ = true;
 
   const BASE = 'https://ffscouter.com/api/v1/losses/seller';
-  const SCRIPT_VERSION = '0.4.2';
+  const SCRIPT_VERSION = '0.5.0';
   const SCRIPT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const GITHUB_REPO = 'https://github.com/E7t7t7/FFContractor';
   const KEY_STORAGE = 'ffscouter-loss-desk-key-v1';
@@ -149,7 +156,7 @@
 
   const host = document.createElement('div');
   host.id = 'ffscouter-personal-loss-desk';
-  host.style.cssText = 'position:fixed !important;inset:0 !important;width:100vw !important;height:100dvh !important;z-index:2147483647 !important;pointer-events:none !important;display:block !important;visibility:visible !important;';
+  host.style.cssText = 'position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;z-index:2147483600!important;pointer-events:none!important;display:block!important;visibility:visible!important;';
   // Attaching to <html> prevents Torn's own page-body redraw from trapping the button.
   document.documentElement.appendChild(host);
   document.documentElement.dataset.ffcontractorVersion = SCRIPT_VERSION;
@@ -157,14 +164,17 @@
   shadow.innerHTML = `
     <style>
       * { box-sizing:border-box; }
-      #scrim { position:fixed; inset:0; pointer-events:auto; background:rgba(0,0,0,.65); display:none; z-index:1; }
+
+      #scrim { position:fixed; inset:0; pointer-events:auto; background:transparent; display:none; z-index:1; }
       #scrim.open { display:block; }
+      /* Chat-style flyout directly above the bottom tab; no centered dialog. */
       #panel { font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-        pointer-events:auto; color:#edf0f7; background:#18181d; border:1px solid #3c3d49; border-radius:19px;
-        box-shadow:0 18px 64px #000c; position:fixed; z-index:2;
-        left:50%; top:46%; transform:translate(-50%,-50%);
-        width:min(440px,calc(100vw - 22px)); height:min(69dvh,760px);
-        max-height:calc(100dvh - 120px); display:none; flex-direction:column; overflow:hidden; }
+        pointer-events:auto; color:#edf0f7; background:#18181d;
+        border:1px solid #3c3d49; border-radius:17px;
+        box-shadow:0 18px 50px #000c; position:fixed; z-index:2;
+        left:16px; right:16px; top:auto; transform:none;
+        bottom:52px; width:auto; height:min(75dvh,780px);
+        max-height:78dvh; display:none; flex-direction:column; overflow:hidden; }
       #panel.open { display:flex; }
       button:focus-visible, input:focus-visible { outline:3px solid #ffb55a; outline-offset:2px; }
       .head { padding:13px 14px; flex-shrink:0; display:flex; gap:8px; align-items:center;
@@ -215,8 +225,8 @@
       .times span { color:#b8c4d6; font-size:11px; }
       .warn { color:#ffd38b; }
       .mono { font-variant-numeric:tabular-nums; }
-      @media (max-width:480px) { #panel { width:calc(100vw - 24px); height:min(68dvh,740px); top:45%; } }
-      @media (max-height:650px) { #panel { top:46%; height:calc(100dvh - 90px); max-height:calc(100dvh - 90px); } }
+      @media (min-width:561px) { #panel { left:auto;right:16px;width:min(500px,calc(100vw - 32px));height:min(74dvh,760px); } }
+      @media (max-height:650px) { #panel { height:calc(100dvh - 95px);max-height:calc(100dvh - 95px); } }
     </style>
     <div id="scrim" aria-hidden="true"></div>
     <div id="panel" role="dialog" aria-label="FFScouter Loss Desk">
@@ -827,7 +837,7 @@
     if (!host.isConnected && document.documentElement) document.documentElement.appendChild(host);
     mountEarlyLauncher();
   }, 2500);
-  console.info('[FFContractor] v' + SCRIPT_VERSION + ' chat tab initialized');
+  console.info('[FFContractor] v' + SCRIPT_VERSION + ' bottom chat tab initialized');
   void init().catch(e => {
     earlyLaunchAction = null;
     earlyLaunchProblem = 'FFContractor initialization failed: ' + (e && (e.message || String(e)));
