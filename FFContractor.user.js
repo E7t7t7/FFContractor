@@ -1,14 +1,19 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.3.0
+// @version      0.3.1
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
 // @updateURL    https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
 // @description  Mobile FFScouter contracts and payouts inside TornPDA, with GitHub update checker.
 // @author       Personal-use script
+// @match        https://www.torn.com/*
+// @match        http://www.torn.com/*
+// @match        https://torn.com/*
 // @match        *://*.torn.com/*
 // @match        *://torn.com/*
+// @include      https://www.torn.com/*
+// @include      https://torn.com/*
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
@@ -21,11 +26,13 @@
  */
 (() => {
   'use strict';
-  if (window.top !== window.self || window.__FFSCOUTER_PERSONAL_LOSS_DESK__) return;
+  // TornPDA can inject inside the active game frame. Never bail out solely
+  // because the WebView is framed (v0.3.0 did this and could hide the launcher).
+  if (window.__FFSCOUTER_PERSONAL_LOSS_DESK__ && document.getElementById('ffscouter-personal-loss-desk')) return;
   window.__FFSCOUTER_PERSONAL_LOSS_DESK__ = true;
 
   const BASE = 'https://ffscouter.com/api/v1/losses/seller';
-  const SCRIPT_VERSION = '0.3.0';
+  const SCRIPT_VERSION = '0.3.1';
   const SCRIPT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const GITHUB_REPO = 'https://github.com/E7t7t7/FFContractor';
   const KEY_STORAGE = 'ffscouter-loss-desk-key-v1';
@@ -66,21 +73,23 @@
 
   const host = document.createElement('div');
   host.id = 'ffscouter-personal-loss-desk';
-  host.style.cssText = 'position:fixed;z-index:2147483640;inset:0;pointer-events:none;';
-  (document.body || document.documentElement).appendChild(host);
+  host.style.cssText = 'position:fixed !important;inset:0 !important;width:100vw !important;height:100dvh !important;z-index:2147483647 !important;pointer-events:none !important;display:block !important;visibility:visible !important;';
+  // Attaching to <html> prevents Torn's own page-body redraw from trapping the button.
+  document.documentElement.appendChild(host);
+  document.documentElement.dataset.ffcontractorVersion = SCRIPT_VERSION;
   const shadow = host.attachShadow({mode: 'open'});
   shadow.innerHTML = `
     <style>
       * { box-sizing:border-box; }
       #bubble, #panel { font: 14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-      #bubble { pointer-events:auto; position:fixed; bottom:calc(79px + env(safe-area-inset-bottom, 0px)); left:12px; z-index:2;
+      #bubble { pointer-events:auto; position:fixed; bottom:calc(150px + env(safe-area-inset-bottom, 0px)); left:12px; z-index:2;
         height:48px; min-width:64px; padding:0 11px; border:1px solid #38a4c9; border-radius:15px; color:#edf9ff;
         background:linear-gradient(155deg,#187ba1,#0e5576); box-shadow:0 5px 22px #0009; font-weight:900; font-size:14px; }
       #bubble:focus-visible, button:focus-visible, input:focus-visible { outline:3px solid #ffb55a; outline-offset:2px; }
       #panel { pointer-events:auto; color:#edf0f7; background:#18181d; border:1px solid #3c3d49; border-radius:18px;
         box-shadow:0 14px 50px #000b; width:min(440px, calc(100vw - 16px));
-        height:min(70dvh, 730px); max-height:calc(100dvh - 155px); position:fixed;
-        left:8px; bottom:calc(137px + env(safe-area-inset-bottom, 0px)); display:none;
+        height:min(65dvh, 730px); max-height:calc(100dvh - 225px); position:fixed;
+        left:8px; bottom:calc(210px + env(safe-area-inset-bottom, 0px)); display:none;
         flex-direction:column; overflow:hidden; }
       #panel.open { display:flex; }
       .head { padding:13px 14px; flex-shrink:0; display:flex; gap:8px; align-items:center;
@@ -131,9 +140,9 @@
       .times span { color:#b8c4d6; font-size:11px; }
       .warn { color:#ffd38b; }
       .mono { font-variant-numeric:tabular-nums; }
-      @media (max-width:480px) { #panel { left:7px; right:7px; bottom:calc(140px + env(safe-area-inset-bottom, 0px));
-          width:calc(100vw - 14px); border-radius:16px; height:min(70dvh, 760px); max-height:calc(100dvh - 155px); } }
-      @media (max-height:650px) { #panel { height:calc(100dvh - 167px); max-height:calc(100dvh - 167px); } }
+      @media (max-width:480px) { #panel { left:7px; right:7px; bottom:calc(210px + env(safe-area-inset-bottom, 0px));
+          width:calc(100vw - 14px); border-radius:16px; height:min(65dvh, 760px); max-height:calc(100dvh - 225px); } }
+      @media (max-height:650px) { #bubble { bottom:100px; } #panel { bottom:156px; height:calc(100dvh - 165px); max-height:calc(100dvh - 165px); } }
     </style>
     <button type="button" id="bubble" aria-label="Open FFScouter Loss Desk">⚔ FF</button>
     <div id="panel" role="dialog" aria-label="FFScouter Loss Desk">
@@ -155,6 +164,7 @@
   const panel = shadow.querySelector('#panel');
   const content = shadow.querySelector('#content');
   const bubble = shadow.querySelector('#bubble');
+  bubble.setAttribute('title', 'FFContractor v' + SCRIPT_VERSION + ' — tap to open');
 
   function activeClaim() {
     return state.claims.find(c => c.state === 'active') ||
@@ -728,5 +738,11 @@
     setOpen(state.open);
     if (isKey(state.key)) void refreshAll();
   }
+  // Torn is a single-page app and sometimes replaces parts of its root tree.
+  // Keep the launcher mounted without creating additional event listeners.
+  setInterval(() => {
+    if (!host.isConnected && document.documentElement) document.documentElement.appendChild(host);
+  }, 2500);
+  console.info('[FFContractor] v' + SCRIPT_VERSION + ' launcher mounted');
   void init();
 })();
