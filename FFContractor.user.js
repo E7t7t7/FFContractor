@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.3.2
+// @version      0.3.3
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
 // @updateURL    https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -26,13 +26,60 @@
  */
 (() => {
   'use strict';
+
+  // BOOTSTRAP: mount the button BEFORE parsing layout or reading storage.
+  // This mirrors the working one-button TornPDA injection diagnostic.
+  const earlyLauncher = document.createElement('button');
+  earlyLauncher.id = 'ffcontractor-launcher';
+  earlyLauncher.type = 'button';
+  earlyLauncher.textContent = '⚔ FF';
+  earlyLauncher.title = 'FFContractor v0.3.3';
+  earlyLauncher.style.cssText = [
+    'all:initial!important',
+    'display:block!important',
+    'position:fixed!important',
+    'top:225px!important',
+    'left:12px!important',
+    'padding:12px 14px!important',
+    'z-index:2147483647!important',
+    'background:#087da4!important',
+    'border:2px solid #bceeff!important',
+    'border-radius:10px!important',
+    'color:white!important',
+    'font:bold 15px sans-serif!important',
+    'box-shadow:0 4px 16px #0009!important',
+    'visibility:visible!important',
+    'opacity:1!important',
+    'pointer-events:auto!important',
+    'cursor:pointer!important'
+  ].join(';');
+  let earlyLaunchAction = null;
+  let earlyLaunchProblem = '';
+  earlyLauncher.onclick = () => {
+    if (earlyLaunchAction) earlyLaunchAction();
+    else alert(earlyLaunchProblem || 'FFContractor is still starting. Try again shortly.');
+  };
+  function mountEarlyLauncher() {
+    const parent = document.body || document.documentElement;
+    if (!parent) return;
+    const other = document.getElementById(earlyLauncher.id);
+    // Use the current element on SPA navigation; do not create duplicate buttons.
+    if (other && other !== earlyLauncher) other.remove();
+    if (earlyLauncher.parentNode !== parent) parent.appendChild(earlyLauncher);
+  }
+  mountEarlyLauncher();
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', mountEarlyLauncher, {once:true});
+  setInterval(mountEarlyLauncher, 2500);
+
+  try {
   // TornPDA can inject inside the active game frame. Never bail out solely
   // because the WebView is framed (v0.3.0 did this and could hide the launcher).
   if (window.__FFSCOUTER_PERSONAL_LOSS_DESK__ && document.getElementById('ffscouter-personal-loss-desk')) return;
   window.__FFSCOUTER_PERSONAL_LOSS_DESK__ = true;
 
   const BASE = 'https://ffscouter.com/api/v1/losses/seller';
-  const SCRIPT_VERSION = '0.3.2';
+  const SCRIPT_VERSION = '0.3.3';
   const SCRIPT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const GITHUB_REPO = 'https://github.com/E7t7t7/FFContractor';
   const KEY_STORAGE = 'ffscouter-loss-desk-key-v1';
@@ -163,39 +210,11 @@
   `;
   const panel = shadow.querySelector('#panel');
   const content = shadow.querySelector('#content');
-  // Plain DOM launcher: unlike a shadow-root button, this can be inspected
-  // directly in TornPDA's browser dev tools and is less sensitive to CSS isolation.
-  shadow.querySelector('#bubble').remove();
-  const bubble = document.createElement('button');
-  bubble.type = 'button';
-  bubble.id = 'ffcontractor-launcher';
-  bubble.textContent = '⚔ FF';
-  bubble.setAttribute('title', 'FFContractor v' + SCRIPT_VERSION + ' — tap to open');
-  bubble.setAttribute('aria-label', 'Open FFScouter Loss Desk');
-  bubble.style.cssText = [
-    'all:initial!important',
-    'display:flex!important',
-    'align-items:center!important',
-    'justify-content:center!important',
-    'position:fixed!important',
-    'left:12px!important',
-    'bottom:calc(153px + env(safe-area-inset-bottom, 0px))!important',
-    'width:73px!important',
-    'height:48px!important',
-    'border-radius:14px!important',
-    'border:2px solid #b9eaff!important',
-    'background:#076c92!important',
-    'color:#fff!important',
-    'box-shadow:0 5px 18px #000a!important',
-    'font:900 16px system-ui,-apple-system,sans-serif!important',
-    'z-index:2147483647!important',
-    'opacity:1!important',
-    'visibility:visible!important',
-    'pointer-events:auto!important',
-    'cursor:pointer!important',
-    'touch-action:manipulation!important'
-  ].join(';');
-  (document.body || document.documentElement).appendChild(bubble);
+  // The early launcher already exists. Keep one button and reveal the
+  // full dashboard only after it has initialized successfully.
+  const bubble = earlyLauncher;
+  const obsoleteBubble = shadow.querySelector('#bubble');
+  if (obsoleteBubble) obsoleteBubble.remove();
 
 
   function activeClaim() {
@@ -723,7 +742,7 @@
     const tab = e.target.closest?.('[data-tab]');
     if (tab) { state.tab = tab.dataset.tab; render(); }
   });
-  bubble.addEventListener('click', () => setOpen(!state.open));
+  earlyLaunchAction = () => setOpen(!state.open);
 
   // Counts down locally every second; claims are reverified by FFScouter, never by the clock.
   setInterval(() => {
@@ -777,5 +796,18 @@
     if (!bubble.isConnected) (document.body || document.documentElement).appendChild(bubble);
   }, 2500);
   console.info('[FFContractor] v' + SCRIPT_VERSION + ' launcher mounted');
-  void init();
+  void init().catch(e => {
+    earlyLaunchAction = null;
+    earlyLaunchProblem = 'FFContractor initialization failed: ' + (e && (e.message || String(e)));
+    earlyLauncher.textContent = 'FF ERROR';
+    earlyLauncher.style.setProperty('background','#a02028','important');
+    console.error('[FFContractor]', e);
+  });
+  } catch (e) {
+    earlyLaunchAction = null;
+    earlyLaunchProblem = 'FFContractor startup error: ' + (e && (e.message || String(e)));
+    earlyLauncher.textContent = 'FF ERROR';
+    earlyLauncher.style.setProperty('background','#a02028','important');
+    console.error('[FFContractor]', e);
+  }
 })();
