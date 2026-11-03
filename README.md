@@ -14,7 +14,7 @@ Install from this **remote URL**, not by copying code or importing a local file.
 
 ## In-app update button
 
-Tap the **⚔ FF** bubble in Torn. The ⇧ icon at the top of the panel—or **Settings → GitHub Updates → Check for Updates**—compares the currently installed version against the file in this repository. When a newer one exists, **Install Update** opens that file in TornPDA, where you can approve its normal install/update dialog. TornPDA controls the actual replacement; a userscript cannot silently change itself.
+Tap the **⚔ FF** chat tab beside Torn's chat controls (similar to LossXchange). The ⇧ icon at the top of the pop-up—or **Settings → GitHub Updates → Check for Updates**—compares the currently installed version against the file in this repository. When a newer one exists, **Install Update** opens that file in TornPDA, where you can approve its normal install/update dialog. TornPDA controls the actual replacement; a userscript cannot silently change itself.
 
 To release a new version, update **FFContractor.user.js** on `main` and increment both the userscript `@version` and internal `SCRIPT_VERSION`.
 
@@ -41,3 +41,12 @@ Version 0.3.1 fixes launcher injection/visibility issues and passed simulated mo
 5. For a fresh installation, choose **+ → Configure → Remote URL → Fetch → Load/Add**, using the raw URL above. Avoid deleting the previous install before backing up your local payout ledger.
 6. If it is still missing, use TornPDA's **Dev Tools → Scripts** on the open Torn page to see whether FFContractor was injected; a screenshot of that view helps identify the problem.
 
+
+
+## v0.4.1: chat-tab interface
+
+The FFContractor launcher now integrates with Torn's **#chatRoot** chat-control bar, positioned toward the left with the other tab icons. It **does not float over the main game**. Tapping it opens a centered dark modal above a dimmed Torn page. Close it using ✕, the backdrop, or Escape. The existing contract, claim, payout-ledger and GitHub-update functions remain in the modal.
+
+If you previously installed the **FFContractor Injection Test** script, disable it now. It was a diagnostic only, not part of the loss desk. TornPDA's normal script updater will detect v0.4.1 from the original GitHub URL.
+
+This integration is syntax-checked, but actual rendering inside iOS TornPDA still requires on-device verification. If no chat tab appears, inspect the chat bar's DOM in TornPDA Dev Tools; the diagnostic proved generic script execution but not chat-bar availability.
