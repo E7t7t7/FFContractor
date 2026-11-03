@@ -1,19 +1,15 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.4.1
+// @version      0.4.2
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
 // @updateURL    https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
 // @description  Mobile FFScouter contracts and payouts inside TornPDA, with GitHub update checker.
 // @author       Personal-use script
 // @match        https://www.torn.com/*
-// @match        http://www.torn.com/*
 // @match        https://torn.com/*
-// @match        *://*.torn.com/*
-// @match        *://torn.com/*
-// @include      https://www.torn.com/*
-// @include      https://torn.com/*
+// @include      *://*.torn.com/*
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
@@ -56,18 +52,36 @@
     if (earlyLaunchAction) earlyLaunchAction();
     else alert(earlyLaunchProblem || 'FFContractor is still starting. Try again shortly.');
   };
+
   function mountEarlyLauncher() {
-    const root = document.getElementById('chatRoot');
-    if (!root) return;
-    const ref = root.querySelector('#people_panel_button, #notes_settings_button, [id^="chat_panel_button:"]');
+    const ref = document.getElementById('people_panel_button') ||
+      document.getElementById('notes_settings_button') ||
+      document.querySelector('[id^="chat_panel_button:"]');
     const bar = ref && ref.parentElement;
-    if (!bar) return;
-    // Keep the FF tab at the left edge beside other chat tabs (as LossXchange does).
-    const first = Array.from(bar.children).find(el => el !== earlyLauncher &&
-      (el.tagName === 'BUTTON' || (el.querySelector && el.querySelector('button')))) || ref;
-    if (earlyLauncher.parentElement !== bar || earlyLauncher.nextSibling !== first)
-      bar.insertBefore(earlyLauncher, first);
-    earlyLauncher.setAttribute('data-ff-chat-tab', 'true');
+    if (bar) {
+      // Same global selector and sibling insertion pattern used by a working
+      // Torn chat-panel userscript; do not require a #chatRoot wrapper.
+      const first = Array.from(bar.children).find(el => el !== earlyLauncher &&
+        (el.tagName === 'BUTTON' || (el.querySelector && el.querySelector('button')))) || ref;
+      earlyLauncher.style.setProperty('position','relative','important');
+      earlyLauncher.style.setProperty('bottom','auto','important');
+      earlyLauncher.style.setProperty('left','auto','important');
+      earlyLauncher.style.setProperty('z-index','30','important');
+      if (earlyLauncher.parentElement !== bar || earlyLauncher.nextSibling !== first) bar.insertBefore(earlyLauncher,first);
+      earlyLauncher.dataset.ffLauncherState = 'chat-tab';
+      return;
+    }
+    // No chat controls in this WebView frame yet? Render a VISIBLE chat-style
+    // tab near the bottom toolbar instead of silently rendering nothing.
+    // If Torn creates chat controls later the next refresh moves this tab into them.
+    const parent = document.body || document.documentElement;
+    if (!parent) return;
+    earlyLauncher.style.setProperty('position','fixed','important');
+    earlyLauncher.style.setProperty('bottom','calc(91px + env(safe-area-inset-bottom,0px))','important');
+    earlyLauncher.style.setProperty('left','10px','important');
+    earlyLauncher.style.setProperty('z-index','2147483647','important');
+    if (earlyLauncher.parentElement !== parent) parent.appendChild(earlyLauncher);
+    earlyLauncher.dataset.ffLauncherState = 'bottom-tab-fallback';
   }
   mountEarlyLauncher();
   if (document.readyState === 'loading')
@@ -94,7 +108,7 @@
   window.__FFSCOUTER_PERSONAL_LOSS_DESK__ = true;
 
   const BASE = 'https://ffscouter.com/api/v1/losses/seller';
-  const SCRIPT_VERSION = '0.4.1';
+  const SCRIPT_VERSION = '0.4.2';
   const SCRIPT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const GITHUB_REPO = 'https://github.com/E7t7t7/FFContractor';
   const KEY_STORAGE = 'ffscouter-loss-desk-key-v1';
