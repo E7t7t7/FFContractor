@@ -1,3 +1,7 @@
+## v0.4.2: visible chat tab fallback
+
+Previous versions required `#chatRoot` and could silently skip the launcher on some TornPDA views. v0.4.2 looks for Torn chat buttons globally, and provides a bottom-left chat-tab fallback whenever they cannot be found. The dashboard stays in a centered modal. Update your existing remote installation; disable the standalone diagnostic script after confirming it works.
+
 # FFContractor — FFScouter Loss Desk for TornPDA
 
 Mobile FFScouter loss-contract dashboard inside TornPDA, including an eight-tile earnings overview, claim controls, payout tracking, and GitHub updates.
