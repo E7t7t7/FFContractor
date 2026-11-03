@@ -30,4 +30,14 @@ Open Torn in TornPDA. Tap the **⚔ FF** floating button, enter your FFScouter-r
 - FFScouter's recent claims API covers only recent history. Ledger totals begin when the script records claims and may not represent lifetime earnings.
 - No automatic attacks, healing, or gameplay decisions.
 
-Version 0.3.0 is an initial integration tested in a simulated mobile browser; real FFScouter claims have not been executed by the developer.
+Version 0.3.1 fixes launcher injection/visibility issues and passed simulated mobile-browser, iframe and re-mount tests; real iPhone installation and FFScouter claims have not been verified.
+
+## ⚔ FF button missing in TornPDA?
+
+1. Open **Settings → Advanced Browser Settings** and ensure **Enable custom user scripts** is ON.
+2. Open **Manage Scripts**, verify FFContractor is listed and enabled, and set **Injection Time: END**.
+3. If upgrading from v0.3.0, use the script's **Remote URL** to fetch/load v0.3.1 from GitHub. The missing-button version cannot update itself through the in-panel button.
+4. Open a Torn page inside TornPDA and reload it. Look on the **left side above the bottom toolbar**, not inside TornPDA's native sword icon.
+5. For a fresh installation, choose **+ → Configure → Remote URL → Fetch → Load/Add**, using the raw URL above. Avoid deleting the previous install before backing up your local payout ledger.
+6. If it is still missing, use TornPDA's **Dev Tools → Scripts** on the open Torn page to see whether FFContractor was injected; a screenshot of that view helps identify the problem.
+
