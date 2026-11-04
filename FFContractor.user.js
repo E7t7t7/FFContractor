@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.5.0
+// @version      0.6.0
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
 // @updateURL    https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -31,20 +31,20 @@
   earlyLauncher.type = 'button';
   earlyLauncher.title = 'FFContractor — Open FFScouter losses';
   earlyLauncher.setAttribute('aria-label', 'Open FFScouter Loss Desk');
-  earlyLauncher.setAttribute('data-ff-launcher-version','0.5.0');
-  earlyLauncher.textContent = '⚔';
+  earlyLauncher.setAttribute('data-ff-launcher-version','0.6.0');
+  earlyLauncher.textContent = '⚔ FF';
   earlyLauncher.style.cssText = [
     'all:initial!important', 'box-sizing:border-box!important',
     'display:flex!important', 'align-items:center!important',
     'justify-content:center!important', 'position:fixed!important',
-    'right:5px!important', 'left:auto!important', 'bottom:0!important',
-    'width:39px!important', 'height:39px!important',
-    'min-width:39px!important', 'min-height:39px!important',
+    'right:auto!important', 'left:12px!important', 'bottom:calc(115px + env(safe-area-inset-bottom, 0px))!important',
+    'width:54px!important', 'height:48px!important',
+    'min-width:54px!important', 'min-height:48px!important',
     'padding:0!important', 'margin:0!important',
     'border-radius:6px 6px 0 0!important', 'border:1px solid #31647b!important',
     'background:linear-gradient(#0a779d,#003c56)!important',
     'box-shadow:inset 0 0 5px #ffffff30,0 -1px 8px #0005!important',
-    'color:#f5fbff!important', 'font:bold 24px/1 system-ui,sans-serif!important',
+    'color:#f5fbff!important', 'font:bold 17px/1 system-ui,sans-serif!important',
     'visibility:visible!important', 'opacity:1!important',
     'z-index:2147483647!important', 'pointer-events:auto!important',
     'cursor:pointer!important', 'touch-action:manipulation!important'
@@ -76,16 +76,18 @@
     const container=document.body || document.documentElement;
     if (!container) return;
     if (earlyLauncher.parentNode !== container) container.appendChild(earlyLauncher);
-    const left=locateChatBarLeft();
-    // Match how chat-style tabs dock: left of the other tab buttons, or to the
-    // bottom-right edge in TornPDA when normal chat controls aren't available.
+    let left=null;
+    try { left=locateChatBarLeft(); } catch (_) { left=null; }
+    // Stay above TornPDA's bottom toolbar. On iOS the browser is not always
+    // allowed to cover the native toolbar with a fixed button at bottom:0.
+    earlyLauncher.style.setProperty('bottom','calc(115px + env(safe-area-inset-bottom,0px))','important');
     if (left == null) {
-      earlyLauncher.style.setProperty('left','auto','important');
-      earlyLauncher.style.setProperty('right','5px','important');
-      earlyLauncher.dataset.ffLauncherState='bottom-edge';
+      earlyLauncher.style.setProperty('left','12px','important');
+      earlyLauncher.style.setProperty('right','auto','important');
+      earlyLauncher.dataset.ffLauncherState='bottom-toolbar-safe';
     } else {
       earlyLauncher.style.setProperty('right','auto','important');
-      earlyLauncher.style.setProperty('left',Math.max(4,Math.round(left-43))+'px','important');
+      earlyLauncher.style.setProperty('left',Math.max(12,Math.round(left))+'px','important');
       earlyLauncher.dataset.ffLauncherState='chat-aligned';
     }
   }
@@ -108,14 +110,18 @@
     document.addEventListener('DOMContentLoaded', observeChatPosition, {once:true});
   else observeChatPosition();
 
-  try {
+  let dashboardLaunched=false;
+  function startDashboard() {
+    if (dashboardLaunched) return;
+    dashboardLaunched=true;
+    try {
   // TornPDA can inject inside the active game frame. Never bail out solely
   // because the WebView is framed (v0.3.0 did this and could hide the launcher).
   if (window.__FFSCOUTER_PERSONAL_LOSS_DESK__ && document.getElementById('ffscouter-personal-loss-desk')) return;
   window.__FFSCOUTER_PERSONAL_LOSS_DESK__ = true;
 
   const BASE = 'https://ffscouter.com/api/v1/losses/seller';
-  const SCRIPT_VERSION = '0.5.0';
+  const SCRIPT_VERSION = '0.6.0';
   const SCRIPT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const GITHUB_REPO = 'https://github.com/E7t7t7/FFContractor';
   const KEY_STORAGE = 'ffscouter-loss-desk-key-v1';
@@ -266,7 +272,7 @@
     sessSet(SESSION_OPEN, state.open ? 'yes' : 'no');
     panel.classList.toggle('open', state.open);
     scrim.classList.toggle('open', state.open);
-    bubble.textContent = state.open ? '✕' : '⚔';
+    bubble.textContent = state.open ? '× FF' : '⚔ FF';
     bubble.setAttribute('aria-expanded', String(state.open));
     bubble.setAttribute('aria-label', state.open ? 'Minimize FFScouter Loss Desk' : 'Open FFScouter Loss Desk');
     if (state.open && state.key && (!state.loaded || Date.now() - state.lastSync > 15000)) void refreshAll();
@@ -838,7 +844,7 @@
     mountEarlyLauncher();
   }, 2500);
   console.info('[FFContractor] v' + SCRIPT_VERSION + ' bottom chat tab initialized');
-  void init().catch(e => {
+  void init().then(() => setOpen(true)).catch(e => {
     earlyLaunchAction = null;
     earlyLaunchProblem = 'FFContractor initialization failed: ' + (e && (e.message || String(e)));
     earlyLauncher.textContent = '!';
@@ -846,10 +852,16 @@
     console.error('[FFContractor]', e);
   });
   } catch (e) {
-    earlyLaunchAction = null;
+    dashboardLaunched=false;
+    earlyLaunchAction = () => alert('FFContractor startup failed: ' + (e && (e.message || String(e))));
     earlyLaunchProblem = 'FFContractor startup error: ' + (e && (e.message || String(e)));
     earlyLauncher.textContent = '!';
     earlyLauncher.style.setProperty('background','#a02028','important');
     console.error('[FFContractor]', e);
   }
+  }
+  // The button is live immediately and dashboard code starts only upon tap.
+  earlyLaunchAction = startDashboard;
+  document.documentElement.setAttribute('data-ffcontractor-injected','0.6.0');
+  mountEarlyLauncher();
 })();
