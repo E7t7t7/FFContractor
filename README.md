@@ -1,85 +1,43 @@
-## v0.6.1 — page-reload persistence fix
-
-The FF launcher now mounts directly under the document root rather than Torn's page body, so body replacements cannot remove it. It reattaches after pageshow, focus, popstate/hash navigation, resize, and page visibility changes. A root observer detects detachments, with a short fallback interval. Repeat injection of the same version reuses the existing launcher instead of creating competing listeners and duplicate tabs. This keeps the raw GitHub script URL, update metadata, and native TornPDA update workflow unchanged.
-
-Validated with JavaScript parsing and a simulated DOM test for initial mount, forced removal, pageshow recovery, and same-document re-injection. **Not yet verified on a real iPhone.** If the launcher disappears on a full WebView reload because TornPDA does not inject the script, the script itself cannot run recovery code; inspect the TornPDA Dev Tools Scripts tab immediately after that reload to verify the active script.
-
-## v0.6.0 — Launcher visibility / lazy dashboard startup
-
-- FF sword button mounts as a plain, direct child of the Torn document body before dashboard initialization.
-- On iOS it is placed **above** TornPDA's bottom toolbar instead of at the bottom edge, where it could be obscured.
-- The dashboard initializes only when the button is tapped; an API or storage problem should not prevent the launcher from being created.
-- If dashboard startup fails, the tab shows an exclamation mark and tapping it can display an error.
-- JavaScript syntax and basic launcher startup tested with a simulated DOM. Live iOS TornPDA behavior is not yet verified.
-
-### If the button is still missing
-
-In TornPDA's Dev Tools → Scripts, verify the **FFScouter Loss Desk** entry shows **v0.6.0** as running, rather than just an update being available. Screenshot the entry, including any script errors. Disable the separate yellow Injection Test script when no longer needed.
-
-## v0.5.0 — Loss X-change-style bottom tab (2026-11-03)
-
-- Rebuilt launcher after examining the **public** Loss X-change integration design. The other project has a no-redistribution license, so FFContractor uses independent code.
-- The launcher is now a direct child of the Torn page body, fixed to the bottom edge, **not injected into Torn's React chat-bar DOM**.
-- When Torn's chat controls exist, FFContractor positions next to them using measured coordinates; otherwise it docks at the bottom-right edge just like the reference implementation.
-- Dashboard opens as a chat-style dark flyout above the tab, with no page-changing navigation.
-- Existing claims, payout ledger and GitHub updater are retained.
-- If you still see no FF tab after installing v0.5.0 and reloading Torn, capture **TornPDA → Dev Tools → Scripts** and any visible FFContractor console error. The experimental injection test can be disabled.
-
-**Status:** Source validated with JavaScript parsing and launcher bootstrapping in a minimal DOM test. On-device TornPDA rendering and live FFScouter claims are not yet verified.
-
-## v0.4.2: visible chat tab fallback
-
-Previous versions required `#chatRoot` and could silently skip the launcher on some TornPDA views. v0.4.2 looks for Torn chat buttons globally, and provides a bottom-left chat-tab fallback whenever they cannot be found. The dashboard stays in a centered modal. Update your existing remote installation; disable the standalone diagnostic script after confirming it works.
-
 # FFContractor — FFScouter Loss Desk for TornPDA
 
-Mobile FFScouter loss-contract dashboard inside TornPDA, including an eight-tile earnings overview, claim controls, payout tracking, and GitHub updates.
+A personal-use FFScouter loss-contract dashboard that runs inside the TornPDA browser, with contracts, claiming, payout reconciliation, and a GitHub update check.
 
-## One-time TornPDA install
+## Current release: v0.7.0
 
-In TornPDA open **Settings → Advanced Browser Settings → Manage Scripts** and choose **Add from URL / Remote**. Paste:
+The installer URL remains the same:
 
 ```text
 https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
 ```
 
-Install from this **remote URL**, not by copying code or importing a local file. TornPDA can then track GitHub updates and prompt you to install new versions.
+The source remains a remote `.user.js` file with matching `@downloadURL` and `@updateURL` metadata so TornPDA can detect version updates. You do **not** need to manually reinstall if TornPDA already detects and offers v0.7.0.
 
-## In-app update button
+## Why v0.7.0 replaces the old launcher
 
-Tap the **⚔ FF** chat tab beside Torn's chat controls (similar to LossXchange). The ⇧ icon at the top of the pop-up—or **Settings → GitHub Updates → Check for Updates**—compares the currently installed version against the file in this repository. When a newer one exists, **Install Update** opens that file in TornPDA, where you can approve its normal install/update dialog. TornPDA controls the actual replacement; a userscript cannot silently change itself.
+Versions 0.3–0.6 accumulated custom positioning, MutationObserver, and Shadow DOM code, without a successful iPhone test. v0.7.0 rebuilds a much smaller interface from scratch (~25 KB), using a plain HTML button inserted into the page body before any HTTP/storage calls, similar to the diagnostic script that was proven to run in TornPDA. The launcher is above the bottom toolbar and remounts if Torn removes it. The dashboard opens as a dark mobile chat flyout, without switching pages.
 
-To release a new version, update **FFContractor.user.js** on `main` and increment both the userscript `@version` and internal `SCRIPT_VERSION`.
+### Included
 
-## Use
+- Eight dashboard boxes: Total Paid, Outstanding, Total Earned, Losses Completed, Contracts Finished, Available Contracts, Active Claims, Payments Pending.
+- FFScouter contracts (GET), claims (GET), claim selected/max (POST), mark complete (POST).
+- Active-claim target link to Torn's normal manual attack screen.
+- Local per-key payout ledger, receipt matching and optional scan of visible Torn message subjects/events.
+- Settings and a manual GitHub update check.
+- Existing storage keys retained from previous versions.
 
-Open Torn in TornPDA. Tap the **⚔ FF** floating button, enter your FFScouter-registered API key, and select **Load contracts**. Contract browsing, claiming, and payment tracking happen in the overlay. Attack targets open the normal Torn attack screen for manual losses.
+FFScouter payout status, not message text alone, determines confirmed paid totals. Personal ledgers cover only claims observed by the script and may not represent lifetime earnings.
 
-## Storage and privacy
+## Install or update
 
-- API keys are not present in the source repository.
-- The key is sent to FFScouter's API and optionally to Torn's official API for the mail-reference scan.
-- Saved keys and local claim ledgers use TornPDA's per-script storage; **Copy ledger JSON** under Settings can help back up totals.
-- FFScouter's recent claims API covers only recent history. Ledger totals begin when the script records claims and may not represent lifetime earnings.
-- No automatic attacks, healing, or gameplay decisions.
+1. In **TornPDA → Settings → Advanced Browser Settings → Manage Scripts**, find **FFScouter Loss Desk - Torn PDA**.
+2. Update the existing remote installation to v0.7.0 through TornPDA's updater. Keep the existing installation unless you specifically want a fresh import.
+3. Set injection to **END** if the UI offers the option, then reopen the Torn page.
+4. Look for the blue **⚔ FF** tab above the bottom-left portion of the browser toolbar. Tap it to open Overview, Contracts, Payouts or Settings.
 
-Version 0.3.1 fixes launcher injection/visibility issues and passed simulated mobile-browser, iframe and re-mount tests; real iPhone installation and FFScouter claims have not been verified.
+If the launcher is still absent after updating, use **Dev Tools → Scripts** to confirm that v0.7.0 executes on that exact Torn page. TornPDA detecting a remote update does not establish that the script has executed.
 
-## ⚔ FF button missing in TornPDA?
+## Validation and limitations
 
-1. Open **Settings → Advanced Browser Settings** and ensure **Enable custom user scripts** is ON.
-2. Open **Manage Scripts**, verify FFContractor is listed and enabled, and set **Injection Time: END**.
-3. If upgrading from v0.3.0, use the script's **Remote URL** to fetch/load v0.3.1 from GitHub. The missing-button version cannot update itself through the in-panel button.
-4. Open a Torn page inside TornPDA and reload it. Look on the **left side above the bottom toolbar**, not inside TornPDA's native sword icon.
-5. For a fresh installation, choose **+ → Configure → Remote URL → Fetch → Load/Add**, using the raw URL above. Avoid deleting the previous install before backing up your local payout ledger.
-6. If it is still missing, use TornPDA's **Dev Tools → Scripts** on the open Torn page to see whether FFContractor was injected; a screenshot of that view helps identify the problem.
+Validated with JavaScript syntax check and simulated mobile Chromium tests: mounting, opening/closing, eight stat boxes, remounting after forced removal, re-injection after reload, contract rendering, and sample FFScouter claim/payout data. **Not yet verified on a live iPhone/TornPDA or authenticated against a real FFScouter account.** It never automates attacks.
 
-
-
-## v0.4.1: chat-tab interface
-
-The FFContractor launcher is independent of Torn's chat-control DOM and docks beside the bottom controls, matching the chat-tab presentation. Tapping it opens a centered dark modal above a dimmed Torn page. Close it using ✕, the backdrop, or Escape. The existing contract, claim, payout-ledger and GitHub-update functions remain in the modal.
-
-If you previously installed the **FFContractor Injection Test** script, disable it now. It was a diagnostic only, not part of the loss desk. TornPDA's normal script updater will detect v0.4.1 from the original GitHub URL.
-
-This integration is syntax-checked, but actual rendering inside iOS TornPDA still requires on-device verification. If no chat tab appears, inspect the chat bar's DOM in TornPDA Dev Tools; the diagnostic proved generic script execution but not chat-bar availability.
+The FFScouter API key is not embedded in the repository. Storage for the key is optional.
