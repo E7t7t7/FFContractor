@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.6.0
+// @version      0.6.1
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
 // @updateURL    https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -23,15 +23,22 @@
 (() => {
   'use strict';
 
+  // Torn can re-inject scripts during navigation in the same document.
+  // Reuse the existing instance instead of creating competing launchers/timers.
+  const existingBoot = window.__FFCONTRACTOR_BOOT__;
+  if (existingBoot && typeof existingBoot.ensure === 'function') {
+    existingBoot.ensure();
+    return;
+  }
 
-  // Launcher is a direct child of <body>, as a Torn-style chat tab. It does NOT
+  // Launcher is a direct child of <html>, as a durable Torn-style chat tab. It does NOT
   // depend on TornPDA exposing Torn's chat button row. No borrowed source code.
   const earlyLauncher = document.createElement('button');
   earlyLauncher.id = 'ffcontractor-launcher';
   earlyLauncher.type = 'button';
   earlyLauncher.title = 'FFContractor — Open FFScouter losses';
   earlyLauncher.setAttribute('aria-label', 'Open FFScouter Loss Desk');
-  earlyLauncher.setAttribute('data-ff-launcher-version','0.6.0');
+  earlyLauncher.setAttribute('data-ff-launcher-version','0.6.1');
   earlyLauncher.textContent = '⚔ FF';
   earlyLauncher.style.cssText = [
     'all:initial!important', 'box-sizing:border-box!important',
@@ -73,8 +80,12 @@
     return coords.length?Math.min(...coords.map(r=>r.left)):null;
   }
   function mountEarlyLauncher() {
-    const container=document.body || document.documentElement;
+    // Mount outside Torn's React-controlled <body>. Body replacement on reload
+    // is a known way to lose ordinary floating buttons.
+    const container=document.documentElement || document.body;
     if (!container) return;
+    const duplicate=document.getElementById('ffcontractor-launcher');
+    if (duplicate && duplicate !== earlyLauncher) duplicate.remove();
     if (earlyLauncher.parentNode !== container) container.appendChild(earlyLauncher);
     let left=null;
     try { left=locateChatBarLeft(); } catch (_) { left=null; }
@@ -94,9 +105,24 @@
   mountEarlyLauncher();
   if (document.readyState === 'loading')
     document.addEventListener('DOMContentLoaded', mountEarlyLauncher, {once:true});
-  setInterval(mountEarlyLauncher, 1600);
+  window.__FFCONTRACTOR_BOOT__ = { version:'0.6.1', ensure:mountEarlyLauncher };
+  setInterval(mountEarlyLauncher, 1200);
   window.addEventListener('resize', mountEarlyLauncher);
-  // Recheck position when Torn rerenders; our button stays attached to <body>.
+  window.addEventListener('pageshow', mountEarlyLauncher);
+  window.addEventListener('popstate', mountEarlyLauncher);
+  window.addEventListener('hashchange', mountEarlyLauncher);
+  window.addEventListener('focus', mountEarlyLauncher);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) mountEarlyLauncher();
+  });
+  // The outer document root persists even when Torn swaps the body.
+  // Watch the root directly and recover if the tab is unexpectedly detached.
+  if (typeof MutationObserver === 'function' && document.documentElement) {
+    new MutationObserver(() => {
+      if (!earlyLauncher.isConnected) mountEarlyLauncher();
+    }).observe(document.documentElement, {childList:true, subtree:false});
+  }
+  // Recheck position when Torn rerenders; our button stays attached to <html>.
   function observeChatPosition() {
     if (!document.body || typeof MutationObserver !== 'function') return;
     let queued=false;
@@ -121,7 +147,7 @@
   window.__FFSCOUTER_PERSONAL_LOSS_DESK__ = true;
 
   const BASE = 'https://ffscouter.com/api/v1/losses/seller';
-  const SCRIPT_VERSION = '0.6.0';
+  const SCRIPT_VERSION = '0.6.1';
   const SCRIPT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const GITHUB_REPO = 'https://github.com/E7t7t7/FFContractor';
   const KEY_STORAGE = 'ffscouter-loss-desk-key-v1';
@@ -862,6 +888,6 @@
   }
   // The button is live immediately and dashboard code starts only upon tap.
   earlyLaunchAction = startDashboard;
-  document.documentElement.setAttribute('data-ffcontractor-injected','0.6.0');
+  document.documentElement.setAttribute('data-ffcontractor-injected','0.6.1');
   mountEarlyLauncher();
 })();
