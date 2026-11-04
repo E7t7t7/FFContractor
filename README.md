@@ -1,3 +1,9 @@
+## v0.6.1 — page-reload persistence fix
+
+The FF launcher now mounts directly under the document root rather than Torn's page body, so body replacements cannot remove it. It reattaches after pageshow, focus, popstate/hash navigation, resize, and page visibility changes. A root observer detects detachments, with a short fallback interval. Repeat injection of the same version reuses the existing launcher instead of creating competing listeners and duplicate tabs. This keeps the raw GitHub script URL, update metadata, and native TornPDA update workflow unchanged.
+
+Validated with JavaScript parsing and a simulated DOM test for initial mount, forced removal, pageshow recovery, and same-document re-injection. **Not yet verified on a real iPhone.** If the launcher disappears on a full WebView reload because TornPDA does not inject the script, the script itself cannot run recovery code; inspect the TornPDA Dev Tools Scripts tab immediately after that reload to verify the active script.
+
 ## v0.6.0 — Launcher visibility / lazy dashboard startup
 
 - FF sword button mounts as a plain, direct child of the Torn document body before dashboard initialization.
