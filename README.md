@@ -1,3 +1,15 @@
+## v0.6.0 — Launcher visibility / lazy dashboard startup
+
+- FF sword button mounts as a plain, direct child of the Torn document body before dashboard initialization.
+- On iOS it is placed **above** TornPDA's bottom toolbar instead of at the bottom edge, where it could be obscured.
+- The dashboard initializes only when the button is tapped; an API or storage problem should not prevent the launcher from being created.
+- If dashboard startup fails, the tab shows an exclamation mark and tapping it can display an error.
+- JavaScript syntax and basic launcher startup tested with a simulated DOM. Live iOS TornPDA behavior is not yet verified.
+
+### If the button is still missing
+
+In TornPDA's Dev Tools → Scripts, verify the **FFScouter Loss Desk** entry shows **v0.6.0** as running, rather than just an update being available. Screenshot the entry, including any script errors. Disable the separate yellow Injection Test script when no longer needed.
+
 ## v0.5.0 — Loss X-change-style bottom tab (2026-11-03)
 
 - Rebuilt launcher after examining the **public** Loss X-change integration design. The other project has a no-redistribution license, so FFContractor uses independent code.
