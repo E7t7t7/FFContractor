@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.7.0
+// @version      0.7.1
 // @description  FFScouter loss contracts in a lightweight TornPDA chat panel, with payouts and GitHub updates.
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -15,9 +15,9 @@
 
 (function () {
   'use strict';
-  // The launcher intentionally uses plain DOM, like the successful TornPDA
-  // injection diagnostic. Dashboard setup and HTTP never block its creation.
-  const VERSION = '0.7.0';
+  // Keep the verified v0.7 plain-DOM launcher and mount lifecycle intact.
+  // Only its CSS is docked alongside the bottom chat tabs.
+  const VERSION = '0.7.1';
   const ROOT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const API = 'https://ffscouter.com/api/v1/losses/seller';
   const ID = 'ffcontractor-launcher';
@@ -31,7 +31,7 @@
   launch.textContent = '⚔ FF';
   launch.title = 'FFContractor v' + VERSION;
   launch.setAttribute('data-ff-version', VERSION);
-  launch.style.cssText = 'all:initial!important;display:flex!important;align-items:center!important;justify-content:center!important;position:fixed!important;left:10px!important;bottom:calc(104px + env(safe-area-inset-bottom,0px))!important;width:62px!important;height:45px!important;background:#125a7b!important;color:#fff!important;font:bold 16px -apple-system,system-ui,sans-serif!important;border:2px solid #6ac9ee!important;border-radius:12px!important;box-shadow:0 5px 16px #0009!important;z-index:2147483647!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;touch-action:manipulation!important;';
+  launch.style.cssText = 'all:initial!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;justify-content:center!important;position:fixed!important;left:54px!important;bottom:0!important;width:53px!important;height:45px!important;background:linear-gradient(180deg,#1b789a,#10445f)!important;color:#fff!important;font:bold 13px -apple-system,system-ui,sans-serif!important;border:1px solid #4c91ac!important;border-bottom:0!important;border-radius:9px 9px 0 0!important;box-shadow:0 -3px 12px #0007,inset 0 1px 0 #ffffff20!important;z-index:2147483647!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;touch-action:manipulation!important;';
 
   function mount() {
     const parent = document.body || document.documentElement;
@@ -100,7 +100,7 @@
     if(document.getElementById('ffcontractor-css')) return;
     const st=document.createElement('style');st.id='ffcontractor-css';st.textContent=`
       #ffcontractor-panel,#ffcontractor-panel *{box-sizing:border-box}
-      #ffcontractor-panel{position:fixed!important;z-index:2147483646!important;left:9px!important;bottom:calc(160px + env(safe-area-inset-bottom,0px))!important;width:calc(100vw - 18px)!important;max-width:480px!important;height:min(70vh,700px)!important;max-height:calc(100vh - 205px)!important;display:none;flex-direction:column;overflow:hidden;background:#181b23;color:#f3f6ff;border:1px solid #4a6478;border-radius:16px;box-shadow:0 12px 44px #000d;font:14px/1.45 -apple-system,system-ui,sans-serif}
+      #ffcontractor-panel{position:fixed!important;z-index:2147483646!important;left:9px!important;bottom:50px!important;width:calc(100vw - 18px)!important;max-width:480px!important;height:min(72dvh,760px)!important;max-height:calc(100dvh - 72px)!important;display:none;flex-direction:column;overflow:hidden;background:#181b23;color:#f3f6ff;border:1px solid #4a6478;border-radius:18px;box-shadow:0 12px 44px #000d;font:14px/1.45 -apple-system,system-ui,sans-serif}
       #ffcontractor-panel.ff-open{display:flex!important}
       #ffcontractor-panel button{font:inherit;font-weight:700;cursor:pointer;background:#29445c;color:#f4f8ff;border:1px solid #58718b;border-radius:8px;padding:9px;min-height:36px}
       #ffcontractor-panel button.ff-primary{background:#087ba5;border-color:#33a8cf}
