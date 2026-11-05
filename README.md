@@ -1,3 +1,11 @@
+## v0.7.1 — chat-tab layout (November 5, 2026)
+
+- Keeps the **proven v0.7.0 launcher bootstrap and remount lifecycle**.
+- Changes the FF button to a narrow, bottom-docked chat-style tab, offset right of the leftmost Loss X-change-style tab.
+- Positions the existing dashboard directly above the bottom tabs.
+- No changes to FFScouter API calls, claim logic, local payout ledger, or GitHub/TornPDA update metadata.
+- JavaScript syntax verified. Actual TornPDA placement must be confirmed on iPhone; if another chat tab overlaps FF, send a screenshot and we can adjust its horizontal offset.
+
 # FFContractor — FFScouter Loss Desk for TornPDA
 
 A personal-use FFScouter loss-contract dashboard that runs inside the TornPDA browser, with contracts, claiming, payout reconciliation, and a GitHub update check.
