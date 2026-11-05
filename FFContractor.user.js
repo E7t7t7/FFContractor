@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.7.1
+// @version      0.8.0
 // @description  FFScouter loss contracts in a lightweight TornPDA chat panel, with payouts and GitHub updates.
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -17,7 +17,7 @@
   'use strict';
   // Keep the verified v0.7 plain-DOM launcher and mount lifecycle intact.
   // Only its CSS is docked alongside the bottom chat tabs.
-  const VERSION = '0.7.1';
+  const VERSION = '0.8.0';
   const ROOT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const API = 'https://ffscouter.com/api/v1/losses/seller';
   const ID = 'ffcontractor-launcher';
@@ -28,18 +28,113 @@
   const launch = document.createElement('button');
   launch.id = ID;
   launch.type = 'button';
-  launch.textContent = '⚔ FF';
+  launch.textContent = '⚔\nFF';
   launch.title = 'FFContractor v' + VERSION;
   launch.setAttribute('data-ff-version', VERSION);
-  launch.style.cssText = 'all:initial!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;justify-content:center!important;position:fixed!important;left:54px!important;bottom:0!important;width:53px!important;height:45px!important;background:linear-gradient(180deg,#1b789a,#10445f)!important;color:#fff!important;font:bold 13px -apple-system,system-ui,sans-serif!important;border:1px solid #4c91ac!important;border-bottom:0!important;border-radius:9px 9px 0 0!important;box-shadow:0 -3px 12px #0007,inset 0 1px 0 #ffffff20!important;z-index:2147483647!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;touch-action:manipulation!important;';
+  launch.style.cssText = 'all:initial!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;justify-content:center!important;position:fixed!important;right:0!important;left:auto!important;top:50%!important;bottom:auto!important;width:42px!important;height:64px!important;padding:0!important;margin:0!important;white-space:pre!important;text-align:center!important;line-height:22px!important;background:linear-gradient(180deg,#1b789a,#10445f)!important;color:#fff!important;font:bold 14px -apple-system,system-ui,sans-serif!important;border:1px solid #4c91ac!important;border-radius:12px 0 0 12px!important;box-shadow:0 2px 12px #0009,inset 0 1px 0 #ffffff22!important;z-index:2147483647!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;cursor:grab!important;user-select:none!important;-webkit-user-select:none!important;touch-action:none!important;';
+
+  // Store only side and proportional vertical position, never absolute pixels.
+  // This survives orientation changes and stays separate from the payout ledger.
+  const DOCK_KEY = 'ffcontractor-tab-position-v1';
+  const DOCK_DEFAULT = {side:'right', fraction:0.52};
+  const clamp = (n,lo,hi) => Math.min(hi,Math.max(lo,n));
+  function sanitizeDock(raw) {
+    return raw && (raw.side==='left'||raw.side==='right') && Number.isFinite(Number(raw.fraction))
+      ? {side:raw.side,fraction:clamp(Number(raw.fraction),0.08,0.92)}
+      : {...DOCK_DEFAULT};
+  }
+  let dockStored=false;
+  let dock={...DOCK_DEFAULT};
+  try {
+    const raw=localStorage.getItem(DOCK_KEY);
+    if(raw){dock=sanitizeDock(JSON.parse(raw));dockStored=true;}
+  } catch (_) {}
+  let drag=null, suppressClickUntil=0, dockTouched=false;
+  function viewport() {
+    return {w:Math.max(240,window.innerWidth||document.documentElement.clientWidth||400),
+      h:Math.max(260,window.innerHeight||document.documentElement.clientHeight||700)};
+  }
+  function launcherTop() {
+    const v=viewport(), limit=Math.max(20,v.h-64-48);
+    return Math.round(clamp(dock.fraction*v.h-32,Math.min(36,limit),limit));
+  }
+  function placeLauncher() {
+    if(drag) return;
+    launch.style.setProperty('top',launcherTop()+'px','important');
+    launch.style.setProperty('bottom','auto','important');
+    launch.style.setProperty('left',dock.side==='left'?'0px':'auto','important');
+    launch.style.setProperty('right',dock.side==='right'?'0px':'auto','important');
+    launch.style.setProperty('border-radius',dock.side==='left'?'0 12px 12px 0':'12px 0 0 12px','important');
+  }
+  function saveDock() {
+    dockTouched=true;
+    try{localStorage.setItem(DOCK_KEY,JSON.stringify(dock));}catch(_){}
+    try {
+      if(typeof PDA_storage!=='undefined' && typeof PDA_storage.set==='function')
+        Promise.resolve(PDA_storage.set(DOCK_KEY,dock)).catch(()=>{});
+    } catch (_) {}
+  }
+  function setDock(side,fraction) {
+    dock=sanitizeDock({side:side,fraction:fraction});
+    saveDock();placeLauncher();placePanel();
+  }
+  // Read native TornPDA storage only as fallback; don't delay showing the tab.
+  if(!dockStored){
+    try {
+      if(typeof PDA_storage!=='undefined' && typeof PDA_storage.get==='function')
+        Promise.resolve(PDA_storage.get(DOCK_KEY,null)).then(value=>{
+          if(!dockTouched && value){dock=sanitizeDock(value);placeLauncher();placePanel();}
+        }).catch(()=>{});
+    } catch (_) {}
+  }
+  launch.addEventListener('pointerdown',e=>{
+    if(e.button!==undefined && e.button!==0)return;
+    const rect=launch.getBoundingClientRect(), v=viewport();
+    drag={id:e.pointerId,x:e.clientX,y:e.clientY,
+      left:Number.isFinite(rect.left)?rect.left:(dock.side==='left'?0:v.w-42),
+      top:Number.isFinite(rect.top)?rect.top:launcherTop(),moved:false};
+    try{launch.setPointerCapture(e.pointerId);}catch(_){}
+  });
+  launch.addEventListener('pointermove',e=>{
+    if(!drag||e.pointerId!==drag.id)return;
+    const dx=e.clientX-drag.x,dy=e.clientY-drag.y, v=viewport();
+    if(Math.hypot(dx,dy)>7)drag.moved=true;
+    if(!drag.moved)return;
+    e.preventDefault();
+    launch.style.setProperty('left',Math.round(clamp(drag.left+dx,0,v.w-42))+'px','important');
+    launch.style.setProperty('right','auto','important');
+    launch.style.setProperty('top',Math.round(clamp(drag.top+dy,24,Math.max(24,v.h-112)))+'px','important');
+  });
+  function finishDrag(e,cancelled) {
+    if(!drag||e.pointerId!==drag.id)return;
+    const previous=drag; drag=null;
+    try{launch.releasePointerCapture(e.pointerId);}catch(_){}
+    if(previous.moved){
+      suppressClickUntil=Date.now()+650;
+      if(!cancelled){
+        const v=viewport();
+        const top=clamp(previous.top+(e.clientY-previous.y),24,Math.max(24,v.h-112));
+        dock={side:e.clientX<v.w/2?'left':'right',
+          fraction:clamp((top+32)/v.h,0.08,0.92)};
+        saveDock();
+      }
+    }
+    placeLauncher();
+    if(opened)placePanel();
+  }
+  launch.addEventListener('pointerup',e=>finishDrag(e,false));
+  launch.addEventListener('pointercancel',e=>finishDrag(e,true));
+
 
   function mount() {
     const parent = document.body || document.documentElement;
     if (parent && launch.parentNode !== parent) parent.appendChild(launch);
+    placeLauncher();
   }
   mount();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, {once:true});
   window.addEventListener('pageshow', mount);
+  window.addEventListener('resize', () => {placeLauncher(); if(opened)placePanel();});
   window.addEventListener('focus', mount);
   window.addEventListener('hashchange', mount);
   window.addEventListener('popstate', mount);
@@ -100,7 +195,7 @@
     if(document.getElementById('ffcontractor-css')) return;
     const st=document.createElement('style');st.id='ffcontractor-css';st.textContent=`
       #ffcontractor-panel,#ffcontractor-panel *{box-sizing:border-box}
-      #ffcontractor-panel{position:fixed!important;z-index:2147483646!important;left:9px!important;bottom:50px!important;width:calc(100vw - 18px)!important;max-width:480px!important;height:min(72dvh,760px)!important;max-height:calc(100dvh - 72px)!important;display:none;flex-direction:column;overflow:hidden;background:#181b23;color:#f3f6ff;border:1px solid #4a6478;border-radius:18px;box-shadow:0 12px 44px #000d;font:14px/1.45 -apple-system,system-ui,sans-serif}
+      #ffcontractor-panel{position:fixed!important;z-index:2147483646!important;left:auto;right:48px;top:22px;bottom:auto!important;width:calc(100vw - 60px)!important;max-width:460px!important;height:min(68dvh,690px);max-height:calc(100dvh - 32px)!important;display:none;flex-direction:column;overflow:hidden;background:#181b23;color:#f3f6ff;border:1px solid #4a6478;border-radius:17px;box-shadow:0 12px 44px #000d;font:14px/1.45 -apple-system,system-ui,sans-serif}
       #ffcontractor-panel.ff-open{display:flex!important}
       #ffcontractor-panel button{font:inherit;font-weight:700;cursor:pointer;background:#29445c;color:#f4f8ff;border:1px solid #58718b;border-radius:8px;padding:9px;min-height:36px}
       #ffcontractor-panel button.ff-primary{background:#087ba5;border-color:#33a8cf}
@@ -121,8 +216,18 @@
       #ffcontractor-panel .ff-note{padding:8px;background:#19374a;border-radius:8px;margin-bottom:8px}
       #ffcontractor-panel .ff-error{padding:8px;background:#5d2434;color:#fff;border-radius:8px;margin-bottom:8px}
       #ffcontractor-panel h3{margin:13px 0 6px;font-size:15px}
-      @media(min-width:650px){#ffcontractor-panel{left:auto!important;right:10px!important}}`;
+      @media(min-width:650px){#ffcontractor-panel{width:min(460px,calc(100vw - 60px))!important}}`;
     (document.head || document.documentElement).appendChild(st);
+  }
+  function placePanel() {
+    if(!panel)return;
+    const v=viewport(), height=Math.round(Math.min(690,v.h*0.68,Math.max(200,v.h-32)));
+    const top=Math.round(clamp(launcherTop()+32-height*0.53,12,Math.max(12,v.h-height-12)));
+    panel.style.setProperty('height',height+'px','important');
+    panel.style.setProperty('top',top+'px','important');
+    panel.style.setProperty('bottom','auto','important');
+    panel.style.setProperty('left',dock.side==='left'?'48px':'auto','important');
+    panel.style.setProperty('right',dock.side==='right'?'48px':'auto','important');
   }
   function buildPanel() {
     css();
@@ -131,6 +236,7 @@
     panel.innerHTML=`<div class="ff-top"><strong style="flex:1">⚔ FFContractor <span class="ff-small">v${VERSION}</span></strong><button data-action="refresh">↻</button><button data-action="update">⇧</button><button data-action="close">✕</button></div><div class="ff-tabs">${['Overview','Contracts','Payouts','Settings'].map(x=>`<button data-tab="${x}">${x}</button>`).join('')}</div><div class="ff-scroll"></div>`;
     (document.body || document.documentElement).appendChild(panel);
     panel.addEventListener('click', handleClick);
+    placePanel();
   }
   function render() {
     if(!panel) return;
@@ -167,6 +273,7 @@
       if(currentLedger.receipts.length)html+=`<div class="ff-small">${currentLedger.receipts.length} matched message references retained locally.</div>`;
     } else {
       html+=`<div class="ff-card"><div><strong>FFScouter API key</strong></div><div class="ff-row"><input id="ff-api-key" type="password" placeholder="16-character key" autocomplete="off" value="${esc(apiKey)}" style="width:100%"><button class="ff-primary" data-action="connect">${isKey(apiKey)?'Reconnect':'Connect'}</button></div><label class="ff-small"><input id="ff-remember" type="checkbox" ${remember?'checked':''}> Remember key on this device</label></div>`;
+      html+=`<div class="ff-card"><strong>Tab position</strong><p class="ff-small">Drag the blue FF handle up, down, or across the screen to switch sides. Tap it to open the panel.</p><div class="ff-row"><button data-action="dockleft">${dock.side==='left'?'✓ ':''}Left</button><button data-action="dockright">${dock.side==='right'?'✓ ':''}Right</button><button data-action="dockreset">Reset</button></div></div>`;
       html+=`<div class="ff-card"><strong>GitHub updates</strong><p class="ff-small">Installed v${VERSION}. TornPDA handles updates from your original remote URL.</p><button data-action="update">Check GitHub for updates</button></div>`;
       html+='<button data-action="forget">Forget API key</button>';
     }
@@ -181,7 +288,8 @@
   function setOpen(value) {
     opened=!!value;buildPanel();
     panel.classList.toggle('ff-open',opened);
-    launch.textContent=opened?'✕ FF':'⚔ FF';
+    launch.textContent=opened?'×\nFF':'⚔\nFF';
+    placePanel();
     if(opened){render(); if(isKey(apiKey)&&Date.now()-lastSync>15000)void refresh();}
   }
   async function request(method,path,body) {
@@ -271,6 +379,9 @@
     if(action==='close')setOpen(false);
     if(action==='refresh')void refresh();
     if(action==='update')void updateCheck();
+    if(action==='dockleft'){setDock('left',dock.fraction);render();}
+    if(action==='dockright'){setDock('right',dock.fraction);render();}
+    if(action==='dockreset'){setDock(DOCK_DEFAULT.side,DOCK_DEFAULT.fraction);render();}
     if(action==='contracts'){tab='Contracts';render();}
     if(action==='payouts'){tab='Payouts';render();}
     if(action==='connect')void connect();
@@ -293,6 +404,7 @@
     if(isKey(apiKey)&&opened)void refresh();
   }
   launch.onclick=function(){
+    if(Date.now()<suppressClickUntil)return;
     try{
       setOpen(!opened);
       if(opened&&!loadState.done){loadState.done=true;void loadState().catch(e=>{errorText='Startup issue: '+String(e.message||e);render()});}
