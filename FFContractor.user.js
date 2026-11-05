@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.8.0
+// @version      0.8.1
 // @description  FFScouter loss contracts in a lightweight TornPDA chat panel, with payouts and GitHub updates.
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -17,7 +17,7 @@
   'use strict';
   // Keep the verified v0.7 plain-DOM launcher and mount lifecycle intact.
   // Only its CSS is docked alongside the bottom chat tabs.
-  const VERSION = '0.8.0';
+  const VERSION = '0.8.1';
   const ROOT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const API = 'https://ffscouter.com/api/v1/losses/seller';
   const ID = 'ffcontractor-launcher';
@@ -161,6 +161,67 @@
   function activateLedger() { const l = ledgerAll[hash(apiKey)]; currentLedger = l && typeof l === 'object' ? l : {claims:{},receipts:[]}; if (!currentLedger.claims) currentLedger.claims={}; if (!Array.isArray(currentLedger.receipts)) currentLedger.receipts=[]; }
   function saveLedger() { ledgerAll[hash(apiKey)]=currentLedger; return nativeSet(LEDGER_STORAGE,ledgerAll); }
   function paid(c) { return c.payment_status === 'resolved' || Number(c.paid_at)>0; }
+
+  // The seller API may expose a target ID under different field names on a
+  // contract, a newly reserved claim, or a refreshed active claim. Never use
+  // the claim ID or order number as the target.
+  function positiveTornId(v) {
+    if (typeof v !== 'string' && typeof v !== 'number') return 0;
+    const t=String(v).trim();
+    if (!/^\d{1,12}$/.test(t)) return 0;
+    const n=Number(t);
+    return Number.isSafeInteger(n) && n > 0 ? n : 0;
+  }
+  function tornIdFromUrl(raw) {
+    if(typeof raw!=='string'||!raw||raw.length>2048)return 0;
+    try {
+      const u=new URL(raw,'https://www.torn.com');
+      if(!['torn.com','www.torn.com'].includes(u.hostname))return 0;
+      for(const key of ['user2ID','user2Id','XID','xid']) {
+        const id=positiveTornId(u.searchParams.get(key));
+        if(id)return id;
+      }
+      return 0;
+    }catch(_){return 0;}
+  }
+  function targetIdFrom(c) {
+    if(!c||typeof c!=='object') return 0;
+    for(const key of ['target_player_id','target_user_id','target_id','target_torn_id',
+      'target_xid','targetId','targetPlayerId','targetUserId','user2ID','user2Id']) {
+      const id=positiveTornId(c[key]);
+      if(id)return id;
+    }
+    if(c.target) {
+      const scalar=positiveTornId(c.target);
+      if(scalar)return scalar;
+      if(typeof c.target==='object'){
+        for(const key of ['player_id','user_id','id','torn_id','xid','target_id']) {
+          const id=positiveTornId(c.target[key]);if(id)return id;
+        }
+      }
+    }
+    for(const key of ['attack_url','target_url','target_profile_url','profile_url','target_link']) {
+      const id=tornIdFromUrl(c[key]);if(id)return id;
+    }
+    for(const key of ['order','contract']) {
+      const nested=c[key];
+      if(nested && typeof nested==='object') {
+        const id=targetIdFrom(nested);if(id)return id;
+      }
+    }
+    return 0;
+  }
+  function matchContract(c) {
+    return contracts.find(x=>String(x.order_number||'')===String(c.order_number||''));
+  }
+  function claimWithTarget(c) {
+    const ledger=currentLedger.claims[String(c.id||'')] || {};
+    const id=targetIdFrom(c)||targetIdFrom(ledger)||targetIdFrom(matchContract(c));
+    return id?{...c,target_player_id:id}:c;
+  }
+  function attackLink(id) {
+    return 'https://www.torn.com/page.php?sid=attack&user2ID='+id;
+  }
   function mergeLedger(data) {
     let changed=false;
     for (const c of data) {
@@ -171,7 +232,8 @@
         slots_claimed:Number(c.slots_claimed == null ? prev.slots_claimed || 0 : c.slots_claimed),
         earnings:Number(c.earnings == null ? prev.earnings || 0 : c.earnings),
         paid_at:Number(c.paid_at || prev.paid_at || 0),payment_status:c.payment_status == null ? prev.payment_status : c.payment_status,
-        claimed_at:Number(c.claimed_at || prev.claimed_at || 0)};
+        claimed_at:Number(c.claimed_at || prev.claimed_at || 0),
+        target_player_id:targetIdFrom(c)||targetIdFrom(prev)||0};
       if(JSON.stringify(prev)!==JSON.stringify(next)) {currentLedger.claims[id]=next;changed=true;}
     }
     if(changed) void saveLedger();
@@ -198,7 +260,8 @@
       #ffcontractor-panel{position:fixed!important;z-index:2147483646!important;left:auto;right:48px;top:22px;bottom:auto!important;width:calc(100vw - 60px)!important;max-width:460px!important;height:min(68dvh,690px);max-height:calc(100dvh - 32px)!important;display:none;flex-direction:column;overflow:hidden;background:#181b23;color:#f3f6ff;border:1px solid #4a6478;border-radius:17px;box-shadow:0 12px 44px #000d;font:14px/1.45 -apple-system,system-ui,sans-serif}
       #ffcontractor-panel.ff-open{display:flex!important}
       #ffcontractor-panel button{font:inherit;font-weight:700;cursor:pointer;background:#29445c;color:#f4f8ff;border:1px solid #58718b;border-radius:8px;padding:9px;min-height:36px}
-      #ffcontractor-panel button.ff-primary{background:#087ba5;border-color:#33a8cf}
+      #ffcontractor-panel button.ff-primary,#ffcontractor-panel a.ff-target-link{background:#087ba5;border-color:#33a8cf}
+      #ffcontractor-panel a.ff-target-link{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:9px;border:1px solid #33a8cf;border-radius:8px;color:#fff;text-decoration:none;font-weight:700;text-align:center;cursor:pointer}
       #ffcontractor-panel button:disabled{opacity:.5}
       #ffcontractor-panel input,#ffcontractor-panel textarea{font:16px -apple-system,system-ui,sans-serif;background:#101723;color:#fff;border:1px solid #62758a;border-radius:7px;padding:9px;min-width:0;max-width:100%}
       #ffcontractor-panel .ff-top{display:flex;align-items:center;gap:7px;background:#232a35;padding:10px;border-bottom:1px solid #3a485a}
@@ -282,8 +345,16 @@
     scroll.scrollTop=oldScroll;
   }
   function activeMarkup(c) {
-    const id=Number(c.target_id||c.target_user_id||c.target||0);
-    return `<div class="ff-card"><strong>Active: ${esc(c.order_number||c.id)}</strong><div class="ff-small">${Number(c.slots_delivered)||0}/${Number(c.slots_claimed)||0} verified · ${money(c.earnings||0)} earned</div><div class="ff-row"><button class="ff-primary" data-action="attack" data-target="${id}" ${id>0?'':'disabled'}>⚔ Attack target</button><button data-action="complete" data-id="${Number(c.id)}">Mark complete</button></div><div class="ff-small">Complete your losses manually on Torn. FFScouter verifies attack logs.</div></div>`;
+    const id=targetIdFrom(claimWithTarget(c));
+    const action=id
+      ? '<a class="ff-target-link" data-action="attack" href="'+attackLink(id)+'">⚔ Attack now</a>'
+      : '<button type="button" data-action="locate-target" data-order="'+esc(c.order_number||'')+'" data-claim-id="'+esc(c.id||'')+'">Find target</button>';
+    return '<div class="ff-card"><strong>Active: '+esc(c.order_number||c.id)+'</strong>'+
+      '<div class="ff-small">'+(Number(c.slots_delivered)||0)+'/'+(Number(c.slots_claimed)||0)+
+      ' verified · '+money(c.earnings||0)+' earned'+(id?' · Target ['+id+']':'')+'</div>'+
+      '<div class="ff-row">'+action+'<button data-action="complete" data-id="'+Number(c.id)+'">Mark complete</button></div>'+
+      (!id?'<div class="ff-small">Target ID was not included with the refreshed claim. Tap Find target to check the order details. If unavailable, <a href="https://ffscouter.com/sell-losses">open your official FFScouter claims</a>.</div>':
+      '<div class="ff-small">Opens Torn’s attack page in this browser. Perform your losses manually.</div>')+'</div>';
   }
   function setOpen(value) {
     opened=!!value;buildPanel();
@@ -314,7 +385,7 @@
       const obj=results[0].value;contracts=Array.isArray(obj.contracts)?obj.contracts:[];cap=Number(obj.max_claim_slots)||10;
     }else fails.push(String(results[0].reason.message||results[0].reason));
     if(results[1].status==='fulfilled'){
-      claims=Array.isArray(results[1].value.claims)?results[1].value.claims:[];mergeLedger(claims);
+      claims=Array.isArray(results[1].value.claims)?results[1].value.claims.map(claimWithTarget):[];mergeLedger(claims);
     }else fails.push(String(results[1].reason.message||results[1].reason));
     errorText=fails.join(' · ');notice=fails.length?'':'Updated successfully';lastSync=Date.now();busy=false;render();
   }
@@ -334,8 +405,22 @@
     if(!Number.isInteger(count)||count<1||count>limit){errorText='Select a valid number of losses.';render();return;}
     if(!window.confirm('Reserve '+count+' losses on '+order+'? FFScouter starts its claim timers immediately.'))return;
     busy=true;render();
-    try{const r=await request('POST','/claim',{order_number:order,slots:max?0:count});notice='Claim reserved. Start the loss attacks promptly.';errorText='';if(r.claim)mergeLedger([r.claim]);await refreshAfterAction();}
+    try{const r=await request('POST','/claim',{order_number:order,slots:max?0:count});notice='Claim reserved. Start the loss attacks promptly.';errorText='';if(r.claim){const fresh=claimWithTarget({...r.claim,order_number:r.claim.order_number||order});mergeLedger([fresh]);claims=[fresh,...claims.filter(x=>String(x.id)!==String(fresh.id))];}await refreshAfterAction();}
     catch(e){errorText=String(e.message||e);busy=false;render();}
+  }
+  async function locateTarget(order,claimId) {
+    if(!order){errorText='This claim has no order reference. Open FFScouter Sell Losses for the official target link.';render();return;}
+    notice='Checking FFScouter for target details…';errorText='';render();
+    try {
+      const data=await request('GET','/orders/'+encodeURIComponent(order));
+      const candidates=[data,data?.order,data?.contract,data?.claim,
+        ...(Array.isArray(data?.claims)?data.claims.filter(c=>String(c.id)===String(claimId)):[])];
+      const id=candidates.map(targetIdFrom).find(Boolean)||0;
+      if(!id) throw Error('FFScouter returned no usable target ID. Use its Target link for this contract.');
+      const item=claims.find(c=>String(c.id)===String(claimId));
+      if(item){item.target_player_id=id;mergeLedger([item]);}
+      notice='Target ['+id+'] found. Tap Attack now.';errorText='';render();
+    }catch(e){errorText=String(e.message||e);notice='';render();}
   }
   async function complete(id){
     if(!window.confirm('Mark this claim complete and release unused slots?'))return;
@@ -387,7 +472,8 @@
     if(action==='connect')void connect();
     if(action==='claim'||action==='claimmax')void claim(b.getAttribute('data-order'),action==='claimmax');
     if(action==='complete')void complete(Number(b.getAttribute('data-id')));
-    if(action==='attack'){const id=Number(b.getAttribute('data-target'));if(Number.isSafeInteger(id)&&id>0){setOpen(false);window.location.assign('https://www.torn.com/loader.php?sid=attack&user2ID='+id)}}
+    if(action==='attack'){setOpen(false);return;} // native <a href> opens same TornPDA tab
+    if(action==='locate-target')void locateTarget(b.getAttribute('data-order'),b.getAttribute('data-claim-id'));
     if(action==='forget'){apiKey='';setSession('');await nativeDelete(KEY_STORAGE);activateLedger();tab='Settings';render();}
     if(action==='export')copyLedger();
     if(action==='scanmail')void scanMail();
