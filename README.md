@@ -1,3 +1,14 @@
+## v0.8.1 — Attack Now link repaired (November 5, 2026)
+
+- Active claim's **Attack now** action is a normal same-tab Torn link to `https://www.torn.com/page.php?sid=attack&user2ID=TARGET`, replacing the older unreliable `loader.php` route.
+- Target ID extraction accepts several seller-contract/claim field names, nested target records, and verified torn.com profile/attack URLs; malformed/untrusted URLs are not accepted.
+- Saves the target ID from the successful claim response to the existing per-account ledger, then reuses it after active-claim refreshes. This avoids losing the target when FFScouter returns a more compact claims list.
+- A missing target ID now displays **Find target**, which checks the official seller order-detail API. If no usable ID is available, the UI explains the problem and provides an explicit fallback to the official FFScouter Sell Losses page. No contract claim is performed by this recovery action.
+- Kept the v0.8.0 draggable edge tab, saved location, claim buttons, payout ledger and remote GitHub update metadata unchanged.
+- Validation: JavaScript syntax, sample FFScouter target field variants, safe URL parsing, ledger/contract fallback, link output and missing-target UI tests passed. Real FFScouter claims and iOS navigation are not yet verified.
+
+**If you have an active timed claim:** do not wait for a script update to finish it. Use FFScouter's official Sell Losses page to open its target link. The API claim and expiry are managed by FFScouter rather than by FFContractor.
+
 ## v0.8.0 — draggable side launcher (November 5, 2026)
 
 The blue **FF** launcher is now a slim vertical handle that defaults to the **right edge, about midway down** the game. This avoids covering TornPDA's bottom toolbar. Tap to open the existing FFScouter panel; **touch and drag** to reposition it vertically, or drag across the screen to snap it to the other edge. The flyout automatically opens inward from whichever edge the handle uses.
