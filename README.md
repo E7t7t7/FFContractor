@@ -1,3 +1,11 @@
+## v0.8.0 — draggable side launcher (November 5, 2026)
+
+The blue **FF** launcher is now a slim vertical handle that defaults to the **right edge, about midway down** the game. This avoids covering TornPDA's bottom toolbar. Tap to open the existing FFScouter panel; **touch and drag** to reposition it vertically, or drag across the screen to snap it to the other edge. The flyout automatically opens inward from whichever edge the handle uses.
+
+The position is saved separately from API credentials and the payout ledger, using local storage with TornPDA storage backup when available. Go to **Settings → Tab position** for Left, Right, and Reset controls. Reset returns it to the middle-right. A drag is not treated as a tap. The verified v0.7.0 plain-DOM launcher and remount logic, contract workflow, payout tracking, and original GitHub auto-update metadata are retained.
+
+**Tests:** JavaScript parsing and a simulated page test confirmed initial right-edge placement, moving the tab to the left, saving its position, and restoring that position after a simulated reload. Real TornPDA/iOS touch and visual behavior still need confirmation.
+
 ## v0.7.1 — chat-tab layout (November 5, 2026)
 
 - Keeps the **proven v0.7.0 launcher bootstrap and remount lifecycle**.
