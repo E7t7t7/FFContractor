@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.8.1
+// @version      0.8.2
 // @description  FFScouter loss contracts in a lightweight TornPDA chat panel, with payouts and GitHub updates.
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -15,9 +15,9 @@
 
 (function () {
   'use strict';
-  // Keep the verified v0.7 plain-DOM launcher and mount lifecycle intact.
-  // Only its CSS is docked alongside the bottom chat tabs.
-  const VERSION = '0.8.1';
+  // Keep v0.7's proven plain-DOM launcher bootstrap and reinjection pattern.
+  // Position recoverability is handled independently of FFScouter API startup.
+  const VERSION = '0.8.2';
   const ROOT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const API = 'https://ffscouter.com/api/v1/losses/seller';
   const ID = 'ffcontractor-launcher';
@@ -35,7 +35,9 @@
 
   // Store only side and proportional vertical position, never absolute pixels.
   // This survives orientation changes and stays separate from the payout ledger.
-  const DOCK_KEY = 'ffcontractor-tab-position-v1';
+  // Reset only tab placement once after the invisible-tab report; v1's stale
+  // coordinates are intentionally ignored. API key and payout keys are unchanged.
+  const DOCK_KEY = 'ffcontractor-tab-position-v2';
   const DOCK_DEFAULT = {side:'right', fraction:0.52};
   const clamp = (n,lo,hi) => Math.min(hi,Math.max(lo,n));
   function sanitizeDock(raw) {
@@ -51,19 +53,36 @@
   } catch (_) {}
   let drag=null, suppressClickUntil=0, dockTouched=false;
   function viewport() {
-    return {w:Math.max(240,window.innerWidth||document.documentElement.clientWidth||400),
-      h:Math.max(260,window.innerHeight||document.documentElement.clientHeight||700)};
+    // iOS WKWebView can expose a larger layout viewport than the visible
+    // screen after zooming, rotating or navigating between Torn pages.
+    const width=Math.max(240,window.innerWidth||document.documentElement.clientWidth||400);
+    const height=Math.max(260,window.innerHeight||document.documentElement.clientHeight||700);
+    const vv=window.visualViewport;
+    const w=vv&&vv.width>120?Math.min(width,vv.width):width;
+    const h=vv&&vv.height>140?Math.min(height,vv.height):height;
+    const x=vv&&Number.isFinite(vv.offsetLeft)?clamp(vv.offsetLeft,0,Math.max(0,width-w)):0;
+    const y=vv&&Number.isFinite(vv.offsetTop)?clamp(vv.offsetTop,0,Math.max(0,height-h)):0;
+    return {w,h,x,y};
   }
   function launcherTop() {
-    const v=viewport(), limit=Math.max(20,v.h-64-48);
-    return Math.round(clamp(dock.fraction*v.h-32,Math.min(36,limit),limit));
+    const v=viewport();
+    const min=v.y+Math.min(24,Math.max(8,v.h-64));
+    const max=Math.max(min,v.y+v.h-64-18);
+    return Math.round(clamp(v.y+dock.fraction*v.h-32,min,max));
   }
   function placeLauncher() {
     if(drag) return;
+    const v=viewport(), x=dock.side==='left'?v.x:Math.max(v.x,v.x+v.w-42);
+    // Use pixel X rather than CSS right:0 (which can be outside the
+    // visible area in a zoomed TornPDA WebView).
+    launch.style.setProperty('position','fixed','important');
     launch.style.setProperty('top',launcherTop()+'px','important');
     launch.style.setProperty('bottom','auto','important');
-    launch.style.setProperty('left',dock.side==='left'?'0px':'auto','important');
-    launch.style.setProperty('right',dock.side==='right'?'0px':'auto','important');
+    launch.style.setProperty('left',Math.round(x)+'px','important');
+    launch.style.setProperty('right','auto','important');
+    launch.style.setProperty('display','flex','important');
+    launch.style.setProperty('visibility','visible','important');
+    launch.style.setProperty('opacity','1','important');
     launch.style.setProperty('border-radius',dock.side==='left'?'0 12px 12px 0':'12px 0 0 12px','important');
   }
   function saveDock() {
@@ -92,7 +111,7 @@
     const rect=launch.getBoundingClientRect(), v=viewport();
     drag={id:e.pointerId,x:e.clientX,y:e.clientY,
       left:Number.isFinite(rect.left)?rect.left:(dock.side==='left'?0:v.w-42),
-      top:Number.isFinite(rect.top)?rect.top:launcherTop(),moved:false};
+      top:Number.isFinite(rect.top)?rect.top:launcherTop(),moved:false,started:Date.now()};
     try{launch.setPointerCapture(e.pointerId);}catch(_){}
   });
   launch.addEventListener('pointermove',e=>{
@@ -101,9 +120,9 @@
     if(Math.hypot(dx,dy)>7)drag.moved=true;
     if(!drag.moved)return;
     e.preventDefault();
-    launch.style.setProperty('left',Math.round(clamp(drag.left+dx,0,v.w-42))+'px','important');
+    launch.style.setProperty('left',Math.round(clamp(drag.left+dx,v.x,v.x+v.w-42))+'px','important');
     launch.style.setProperty('right','auto','important');
-    launch.style.setProperty('top',Math.round(clamp(drag.top+dy,24,Math.max(24,v.h-112)))+'px','important');
+    launch.style.setProperty('top',Math.round(clamp(drag.top+dy,v.y+12,Math.max(v.y+12,v.y+v.h-76)))+'px','important');
   });
   function finishDrag(e,cancelled) {
     if(!drag||e.pointerId!==drag.id)return;
@@ -113,9 +132,9 @@
       suppressClickUntil=Date.now()+650;
       if(!cancelled){
         const v=viewport();
-        const top=clamp(previous.top+(e.clientY-previous.y),24,Math.max(24,v.h-112));
-        dock={side:e.clientX<v.w/2?'left':'right',
-          fraction:clamp((top+32)/v.h,0.08,0.92)};
+        const top=clamp(previous.top+(e.clientY-previous.y),v.y+12,Math.max(v.y+12,v.y+v.h-76));
+        dock={side:e.clientX<v.x+v.w/2?'left':'right',
+          fraction:clamp((top-v.y+32)/v.h,0.08,0.92)};
         saveDock();
       }
     }
@@ -124,17 +143,28 @@
   }
   launch.addEventListener('pointerup',e=>finishDrag(e,false));
   launch.addEventListener('pointercancel',e=>finishDrag(e,true));
+  launch.addEventListener('lostpointercapture', () => {
+    // iOS may cancel touch capture when the app bar changes or a page reloads.
+    if(drag){drag=null;placeLauncher();}
+  });
 
 
   function mount() {
     const parent = document.body || document.documentElement;
     if (parent && launch.parentNode !== parent) parent.appendChild(launch);
+    if(drag && Date.now()-drag.started>6500) drag=null;
     placeLauncher();
+    if(opened && panel && !panel.isConnected) buildPanel();
+    if(opened && panel)placePanel();
   }
   mount();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, {once:true});
   window.addEventListener('pageshow', mount);
-  window.addEventListener('resize', () => {placeLauncher(); if(opened)placePanel();});
+  window.addEventListener('resize', mount);
+  if(window.visualViewport) {
+    window.visualViewport.addEventListener('resize', mount);
+    window.visualViewport.addEventListener('scroll', mount);
+  }
   window.addEventListener('focus', mount);
   window.addEventListener('hashchange', mount);
   window.addEventListener('popstate', mount);
@@ -284,13 +314,16 @@
   }
   function placePanel() {
     if(!panel)return;
-    const v=viewport(), height=Math.round(Math.min(690,v.h*0.68,Math.max(200,v.h-32)));
-    const top=Math.round(clamp(launcherTop()+32-height*0.53,12,Math.max(12,v.h-height-12)));
+    const v=viewport(), width=Math.round(Math.max(180,Math.min(460,v.w-60)));
+    const height=Math.round(Math.max(180,Math.min(690,v.h*0.68,v.h-24)));
+    const top=Math.round(clamp(launcherTop()+32-height*0.53,v.y+12,Math.max(v.y+12,v.y+v.h-height-12)));
+    const left=Math.round(dock.side==='left'?v.x+48:v.x+v.w-48-width);
+    panel.style.setProperty('width',width+'px','important');
     panel.style.setProperty('height',height+'px','important');
     panel.style.setProperty('top',top+'px','important');
     panel.style.setProperty('bottom','auto','important');
-    panel.style.setProperty('left',dock.side==='left'?'48px':'auto','important');
-    panel.style.setProperty('right',dock.side==='right'?'48px':'auto','important');
+    panel.style.setProperty('left',left+'px','important');
+    panel.style.setProperty('right','auto','important');
   }
   function buildPanel() {
     css();
