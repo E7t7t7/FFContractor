@@ -154,8 +154,8 @@
     if (parent && launch.parentNode !== parent) parent.appendChild(launch);
     if(drag && Date.now()-drag.started>6500) drag=null;
     placeLauncher();
-    if(opened && panel && !panel.isConnected) buildPanel();
-    if(opened && panel)placePanel();
+    // Panel reattachment happens after panel state initializes; mount() also
+    // runs early before the dashboard's let bindings exist.
   }
   mount();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, {once:true});
@@ -172,6 +172,11 @@
   setInterval(mount, 1500);
 
   let panel, status, tab = 'Overview', opened = false, apiKey = '', remember = false, busy = false;
+  // Torn may replace its body after the modal has already opened.
+  setInterval(() => {
+    if (opened && panel && !panel.isConnected) { buildPanel(); render(); }
+    else if (opened && panel) placePanel();
+  }, 1900);
   let contracts = [], claims = [], cap = 10, lastSync = 0, errorText = '', notice = '', verifying = false;
   let ledgerAll = {}, currentLedger = {claims:{},receipts:[]};
   const KEY_STORAGE = 'ffscouter-loss-desk-key-v1';
