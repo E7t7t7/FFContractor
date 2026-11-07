@@ -1,3 +1,15 @@
+## v0.8.2 — missing side icon recovery (November 7, 2026)
+
+The **FF** tab remains a draggable side handle, but now calculates its position using the browser's visible viewport when available rather than just the full page/layout viewport. This helps when TornPDA zooms, changes orientation, restores a tab, or reports a larger WebView layout than the visible phone screen.
+
+- **One-time placement reset:** switches only the tab-position preference to a new versioned key, starting at middle-right; old dock coordinates are ignored. API keys and the payout ledger are untouched.
+- Places the tab using a visible-screen X coordinate (instead of `right:0`, which can be offscreen when zoomed).
+- Recovers from a stale interrupted touch drag after 6.5 seconds, and from touch capture cancellation.
+- Rechecks placement on tab restoration, navigation, viewport resize/scroll, focus, and the existing mount interval.
+- The panel also uses visible-screen bounds so it remains next to the side handle.
+
+**Validation:** JavaScript parses. Simulated normal, zoomed/offset and narrow viewports all mounted the FF tab visibly, and forced launcher removal recovered on the next mount check. Real iPhone behavior remains to be confirmed. If the icon is still absent after installing v0.8.2, check TornPDA's **Dev Tools → Scripts** to see whether FFContractor actually executed on the current page; a userscript cannot fix failure to inject itself.
+
 ## v0.8.1 — Attack Now link repaired (November 5, 2026)
 
 - Active claim's **Attack now** action is a normal same-tab Torn link to `https://www.torn.com/page.php?sid=attack&user2ID=TARGET`, replacing the older unreliable `loader.php` route.
