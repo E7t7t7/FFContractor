@@ -1,3 +1,14 @@
+## v0.9.0 — coordinated Commander/mobile maintenance
+
+- Same standalone TornPDA launcher, draggable position and remount lifecycle retained.
+- HTTP transport supports TornPDA first and Commander's optional userscript bridge second. Install URL remains unchanged.
+- Claim Max sends the displayed bounded positive count, never an open-ended zero. One active claim is checked before reservation.
+- Durable pending-request guards block duplicate claims/completions after interrupted responses; refresh reconciles actual remote claim/order identity.
+- Message scans explicitly request a separate, unsaved Torn API key; never silently reuse the seller credential. Message matches remain references, not payment confirmation.
+- Exports identify provider/schema and known owner without credentials. Desktop retrieves recent claims via the seller API; phone-local older history is not automatically synchronized.
+- Commander can optionally watch NEW API/phone claims and run its owning worker when explicitly armed. Keep the PC awake, signed in and running. Avoid concurrent manual phone attacks.
+- Tests are simulated; iPhone launcher/navigation and real seller reservations remain unverified.
+
 ## v0.8.2 — missing side icon recovery (November 7, 2026)
 
 The **FF** tab remains a draggable side handle, but now calculates its position using the browser's visible viewport when available rather than just the full page/layout viewport. This helps when TornPDA zooms, changes orientation, restores a tab, or reports a larger WebView layout than the visible phone screen.
@@ -41,7 +52,7 @@ The position is saved separately from API credentials and the payout ledger, usi
 
 A personal-use FFScouter loss-contract dashboard that runs inside the TornPDA browser, with contracts, claiming, payout reconciliation, and a GitHub update check.
 
-## Current release: v0.7.0
+## Current release: v0.9.0
 
 The installer URL remains the same:
 

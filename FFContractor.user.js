@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.8.2
+// @version      0.9.0
 // @description  FFScouter loss contracts in a lightweight TornPDA chat panel, with payouts and GitHub updates.
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -10,6 +10,9 @@
 // @match        https://torn.com/*
 // @include      *://*.torn.com/*
 // @run-at       document-end
+// @connect      ffscouter.com
+// @connect      api.torn.com
+// @connect      raw.githubusercontent.com
 // @grant        none
 // ==/UserScript==
 
@@ -17,7 +20,7 @@
   'use strict';
   // Keep v0.7's proven plain-DOM launcher bootstrap and reinjection pattern.
   // Position recoverability is handled independently of FFScouter API startup.
-  const VERSION = '0.8.2';
+  const VERSION = '0.9.0';
   const ROOT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const API = 'https://ffscouter.com/api/v1/losses/seller';
   const ID = 'ffcontractor-launcher';
@@ -177,7 +180,11 @@
     if (opened && panel && !panel.isConnected) { buildPanel(); render(); }
     else if (opened && panel) placePanel();
   }, 1900);
-  let contracts = [], claims = [], cap = 10, lastSync = 0, errorText = '', notice = '', verifying = false;
+  let contracts = [], claims = [], cap = 0, lastSync = 0, errorText = '', notice = '', verifying = false;
+  let pendingAll={},claimsCheckedAt=0,ownerPlayer=0;
+  const PENDING_STORAGE='ffcontractor-pending-v1';
+  const pending=()=>pendingAll[hash(apiKey)];
+  async function setPending(value){if(value)pendingAll[hash(apiKey)]=value;else delete pendingAll[hash(apiKey)];await nativeSet(PENDING_STORAGE,pendingAll);if(value){const saved=await nativeGet(PENDING_STORAGE,{});if(saved[hash(apiKey)]?.nonce!==value.nonce)throw Error('Could not save the request guard. No reservation sent.');}}
   let ledgerAll = {}, currentLedger = {claims:{},receipts:[]};
   const KEY_STORAGE = 'ffscouter-loss-desk-key-v1';
   const LEDGER_STORAGE = 'ffscouter-loss-desk-ledger-v2';
@@ -195,7 +202,7 @@
   async function nativeDelete(k) { try { if(typeof PDA_storage !== 'undefined' && PDA_storage.delete) return await PDA_storage.delete(k); } catch (_) {} try { localStorage.removeItem(k); } catch (_) {} }
   function activateLedger() { const l = ledgerAll[hash(apiKey)]; currentLedger = l && typeof l === 'object' ? l : {claims:{},receipts:[]}; if (!currentLedger.claims) currentLedger.claims={}; if (!Array.isArray(currentLedger.receipts)) currentLedger.receipts=[]; }
   function saveLedger() { ledgerAll[hash(apiKey)]=currentLedger; return nativeSet(LEDGER_STORAGE,ledgerAll); }
-  function paid(c) { return c.payment_status === 'resolved' || Number(c.paid_at)>0; }
+  function paid(c) { return !c.payment_review_required && (c.payment_status === 'resolved' || Number(c.paid_at)>0); }
 
   // The seller API may expose a target ID under different field names on a
   // contract, a newly reserved claim, or a refreshed active claim. Never use
@@ -205,13 +212,13 @@
     const t=String(v).trim();
     if (!/^\d{1,12}$/.test(t)) return 0;
     const n=Number(t);
-    return Number.isSafeInteger(n) && n > 0 ? n : 0;
+    return Number.isSafeInteger(n) && n > 0 && n <= 2147483647 ? n : 0;
   }
   function tornIdFromUrl(raw) {
     if(typeof raw!=='string'||!raw||raw.length>2048)return 0;
     try {
       const u=new URL(raw,'https://www.torn.com');
-      if(!['torn.com','www.torn.com'].includes(u.hostname))return 0;
+      if(u.protocol!=='https:'||!['torn.com','www.torn.com'].includes(u.hostname))return 0;
       for(const key of ['user2ID','user2Id','XID','xid']) {
         const id=positiveTornId(u.searchParams.get(key));
         if(id)return id;
@@ -260,14 +267,19 @@
   function mergeLedger(data) {
     let changed=false;
     for (const c of data) {
-      const id=String(c.id || ''); if(!/^\d+$/.test(id))continue;
+      const id=String(c.id || ''); if(!/^\d+$/.test(id)||!Number.isSafeInteger(Number(id))||Number(id)<=0)continue;
       const prev=currentLedger.claims[id] || {};
       const next={...prev,id:c.id,order_number:c.order_number || prev.order_number || '',state:c.state || prev.state || '',
         slots_delivered:Number(c.slots_delivered == null ? prev.slots_delivered || 0 : c.slots_delivered),
         slots_claimed:Number(c.slots_claimed == null ? prev.slots_claimed || 0 : c.slots_claimed),
         earnings:Number(c.earnings == null ? prev.earnings || 0 : c.earnings),
-        paid_at:Number(c.paid_at || prev.paid_at || 0),payment_status:c.payment_status == null ? prev.payment_status : c.payment_status,
+        paid_at:Object.prototype.hasOwnProperty.call(c,'paid_at')?Number(c.paid_at||0):Number(prev.paid_at||0),payment_status:Object.prototype.hasOwnProperty.call(c,'payment_status')?(c.payment_status||''):(prev.payment_status||''),payment_review_required:Object.prototype.hasOwnProperty.call(c,'payment_review_required')?!!c.payment_review_required:!!prev.payment_review_required,
         claimed_at:Number(c.claimed_at || prev.claimed_at || 0),
+        price_per_loss:Number(c.price_per_loss == null ? prev.price_per_loss || 0 : c.price_per_loss),
+        expires_at:Number(c.expires_at == null ? prev.expires_at || 0 : c.expires_at),
+        idle_deadline_at:Object.prototype.hasOwnProperty.call(c,'idle_deadline_at')?Number(c.idle_deadline_at||0):Number(prev.idle_deadline_at||0),
+        completed_at:Object.prototype.hasOwnProperty.call(c,'completed_at')?Number(c.completed_at||0):Number(prev.completed_at||0),
+        hits:Array.from(new Map([...(prev.hits||[]),...(c.hits||[])].filter(x=>Number.isSafeInteger(Number(x.attack_id))&&Number(x.attack_id)>0).map(x=>[String(x.attack_id),x])).values()),
         target_player_id:targetIdFrom(c)||targetIdFrom(prev)||0};
       if(JSON.stringify(prev)!==JSON.stringify(next)) {currentLedger.claims[id]=next;changed=true;}
     }
@@ -275,7 +287,7 @@
   }
   function summarize() {
     const all=Object.values(currentLedger.claims);
-    const due=all.filter(c=>!paid(c)&&c.state!=='active'&&Number(c.earnings)>0);
+    const due=all.filter(c=>!paid(c)&&Number(c.earnings)>0);
     return [
       ['Total paid', money(all.filter(paid).reduce((a,c)=>a+Number(c.earnings||0),0))],
       ['Outstanding',money(due.reduce((a,c)=>a+Number(c.earnings||0),0))],
@@ -376,9 +388,11 @@
       html+=`<div class="ff-card"><div><strong>FFScouter API key</strong></div><div class="ff-row"><input id="ff-api-key" type="password" placeholder="16-character key" autocomplete="off" value="${esc(apiKey)}" style="width:100%"><button class="ff-primary" data-action="connect">${isKey(apiKey)?'Reconnect':'Connect'}</button></div><label class="ff-small"><input id="ff-remember" type="checkbox" ${remember?'checked':''}> Remember key on this device</label></div>`;
       html+=`<div class="ff-card"><strong>Tab position</strong><p class="ff-small">Drag the blue FF handle up, down, or across the screen to switch sides. Tap it to open the panel.</p><div class="ff-row"><button data-action="dockleft">${dock.side==='left'?'✓ ':''}Left</button><button data-action="dockright">${dock.side==='right'?'✓ ':''}Right</button><button data-action="dockreset">Reset</button></div></div>`;
       html+=`<div class="ff-card"><strong>GitHub updates</strong><p class="ff-small">Installed v${VERSION}. TornPDA handles updates from your original remote URL.</p><button data-action="update">Check GitHub for updates</button></div>`;
+      html+='<div class="ff-card"><a href="https://ffscouter.com/sell-losses">Seller rules / data policy</a> · <a href="https://ffscouter.com/api-docs/guidance">API guidance</a><p class="ff-small">Standalone in TornPDA or optional inside Commander. The desktop can watch NEW claims when explicitly armed; no PC is required for mobile use. Older phone history is not automatically copied. Consider FFScouter premium to support the provider.</p></div>';
       html+='<button data-action="forget">Forget API key</button>';
     }
     if(!isKey(apiKey)&&tab!=='Settings')html='<div class="ff-note">Add your FFScouter API key in Settings to load contracts.</div>'+html;
+    if(pending())html='<div class="ff-note">A reservation/completion may have succeeded. Refresh claims before retrying. <button data-action="clear-pending">Reviewed claims — clear request guard</button></div>'+html;
     scroll.innerHTML=html;
     scroll.scrollTop=oldScroll;
   }
@@ -401,18 +415,22 @@
     placePanel();
     if(opened){render(); if(isKey(apiKey)&&Date.now()-lastSync>15000)void refresh();}
   }
-  async function request(method,path,body) {
+  async function sendHttp(method,url,headers,body){
+    if(method==='GET'&&typeof PDA_httpGet==='function')return await PDA_httpGet(url,headers);
+    if(method==='POST'&&typeof PDA_httpPost==='function')return await PDA_httpPost(url,headers,body);
+    if(typeof GM_xmlhttpRequest==='function')return await new Promise((resolve,reject)=>GM_xmlhttpRequest({method,url,headers,data:body,timeout:25000,onload:resolve,onerror:()=>reject(Error('Connection interrupted; refresh claims before retrying.')),ontimeout:()=>reject(Error('Request timed out; refresh claims before retrying.'))}));
+    throw Error('Use TornPDA on mobile or install this script in Torn Commander. HTTP bridge unavailable.');
+  }
+  async function request(method,path,body,base=API) {
     if(!isKey(apiKey))throw Error('Enter your 16-character FFScouter API key in Settings.');
     let r;
     if(method==='GET'){
-      if(typeof PDA_httpGet!=='function')throw Error('TornPDA HTTP bridge is unavailable.');
-      r=await PDA_httpGet(API+path+(path.includes('?')?'&':'?')+'key='+encodeURIComponent(apiKey),{Accept:'application/json'});
+      r=await sendHttp('GET',base+path+(path.includes('?')?'&':'?')+'key='+encodeURIComponent(apiKey),{Accept:'application/json'});
     } else {
-      if(typeof PDA_httpPost!=='function')throw Error('TornPDA POST bridge is unavailable.');
-      r=await PDA_httpPost(API+path,{Accept:'application/json','Content-Type':'application/json'},JSON.stringify({key:apiKey,...(body||{})}));
+      r=await sendHttp('POST',base+path+'?key='+encodeURIComponent(apiKey),{Accept:'application/json','Content-Type':'application/json'},JSON.stringify(body||{}));
     }
     let json;try{json=typeof r.responseText==='string'?JSON.parse(r.responseText):r.responseText;}catch(_){throw Error('Server returned invalid JSON');}
-    if(Number(r.status)<200||Number(r.status)>=300||!json||json.error)throw Error(String(json&&json.error||json&&json.message||'HTTP '+r.status));
+    if(Number(r.status)<200||Number(r.status)>=300||!json||json.error)throw Error(String(json&&json.error||json&&json.message||'HTTP '+r.status).split(apiKey).join('[redacted]'));
     return json;
   }
   async function refresh() {
@@ -420,22 +438,27 @@
     const results=await Promise.allSettled([request('GET','/contracts'),request('GET','/claims')]);
     const fails=[];
     if(results[0].status==='fulfilled'){
-      const obj=results[0].value;contracts=Array.isArray(obj.contracts)?obj.contracts:[];cap=Number(obj.max_claim_slots)||10;
+      const obj=results[0].value;contracts=Array.isArray(obj.contracts)?obj.contracts:[];cap=Math.max(0,Number(obj.max_claim_slots)||0);
     }else fails.push(String(results[0].reason.message||results[0].reason));
     if(results[1].status==='fulfilled'){
-      claims=Array.isArray(results[1].value.claims)?results[1].value.claims.map(claimWithTarget):[];mergeLedger(claims);
+      claims=Array.isArray(results[1].value.claims)?results[1].value.claims.map(claimWithTarget):[];mergeLedger(claims);claimsCheckedAt=Date.now();
+      const p=pending();if(p&&((p.type==='claim'&&claims.some(c=>String(c.order_number)===p.order&&!(p.known||[]).includes(String(c.id))&&Number(c.claimed_at)>=p.at-5))||(p.type==='complete'&&claims.some(c=>String(c.id)===p.id&&c.state!=='active'))))await setPending(null);
     }else fails.push(String(results[1].reason.message||results[1].reason));
     errorText=fails.join(' · ');notice=fails.length?'':'Updated successfully';lastSync=Date.now();busy=false;render();
   }
   async function connect(){
+    if(busy||pending()){errorText="Reconcile the current request before changing seller accounts.";render();return;}
     const key=String(panel.querySelector('#ff-api-key')?.value||'').trim();
     if(!isKey(key)){errorText='API key must be 16 letters/numbers.';render();return;}
-    apiKey=key;remember=!!panel.querySelector('#ff-remember')?.checked;
+    ownerPlayer=0;apiKey=key;remember=!!panel.querySelector('#ff-remember')?.checked;
     setSession(key);activateLedger();if(remember)await nativeSet(KEY_STORAGE,key);else await nativeDelete(KEY_STORAGE);
-    tab='Overview';await refresh();
+    try{const identity=await request('GET','/account/balance',null,'https://ffscouter.com/api/v1');ownerPlayer=positiveTornId(identity.player_id);}catch(_){}tab='Overview';await refresh();
   }
   async function claim(order,max){
     const c=contracts.find(c=>String(c.order_number)===order);if(!c||busy)return;
+    if(pending()){errorText='Previous request needs reconciliation. Refresh claims; do not reserve twice.';render();return;}
+    if(claims.some(c=>c.state==='active'&&Number(c.expires_at)>Date.now()/1000)){errorText='Only one active claim is allowed. Complete the existing claim first.';render();return;}
+    if(Date.now()-lastSync>45000||!claimsCheckedAt||Date.now()-claimsCheckedAt>45000){errorText='Refresh seller data before reserving.';render();return;}
     const limit=Math.max(0,Math.min(Number(c.slots_available)||0,cap));
     const input=panel.querySelectorAll('[data-order-input]');let num=0;
     input.forEach(x=>{if(x.getAttribute('data-order-input')===order)num=Number(x.value)});
@@ -443,7 +466,8 @@
     if(!Number.isInteger(count)||count<1||count>limit){errorText='Select a valid number of losses.';render();return;}
     if(!window.confirm('Reserve '+count+' losses on '+order+'? FFScouter starts its claim timers immediately.'))return;
     busy=true;render();
-    try{const r=await request('POST','/claim',{order_number:order,slots:max?0:count});notice='Claim reserved. Start the loss attacks promptly.';errorText='';if(r.claim){const fresh=claimWithTarget({...r.claim,order_number:r.claim.order_number||order});mergeLedger([fresh]);claims=[fresh,...claims.filter(x=>String(x.id)!==String(fresh.id))];}await refreshAfterAction();}
+    try{await setPending({type:'claim',order,known:claims.map(x=>String(x.id)),at:Math.floor(Date.now()/1000),nonce:Date.now()+'-'+Math.random()});const r=await request('POST','/claim',{order_number:order,slots:count});
+      if(!r.claim||!positiveTornId(r.claim.target_player_id)||!Number.isSafeInteger(Number(r.claim.id))||Number(r.claim.id)<=0||(pending()?.known||[]).includes(String(r.claim.id))||Number(r.claim.slots_claimed)<1||Number(r.claim.slots_claimed)>count||String(r.claim.order_number)!==order)throw Error('Reservation response incomplete; refresh to reconcile.');notice='Claim reserved. If Commander is armed at home it can discover this claim; avoid attacking it on both devices at once.';errorText='';if(r.claim){const fresh=claimWithTarget({...r.claim,state:r.claim.state||'active',claimed_at:r.claim.claimed_at||Math.floor(Date.now()/1000),price_per_loss:c.price_per_loss,order_number:r.claim.order_number||order});mergeLedger([fresh]);claims=[fresh,...claims.filter(x=>String(x.id)!==String(fresh.id))];}await saveLedger();await setPending(null);await refreshAfterAction();}
     catch(e){errorText=String(e.message||e);busy=false;render();}
   }
   async function locateTarget(order,claimId) {
@@ -461,9 +485,10 @@
     }catch(e){errorText=String(e.message||e);notice='';render();}
   }
   async function complete(id){
+    if(pending()){errorText='Refresh/reconcile the previous request first.';render();return;}
     if(!window.confirm('Mark this claim complete and release unused slots?'))return;
     busy=true;render();
-    try{await request('POST','/claims/'+id+'/complete');notice='Claim submitted for settlement.';errorText='';await refreshAfterAction();}
+    try{await setPending({type:'complete',id:String(id),at:Math.floor(Date.now()/1000),nonce:Date.now()+'-'+Math.random()});const result=await request('POST','/claims/'+id+'/complete');if(!result.claim||String(result.claim.id)!==String(id))throw Error('Completion response incomplete; refresh to reconcile.');mergeLedger([result.claim]);await saveLedger();await setPending(null);notice='Claim submitted for settlement.';errorText='';await refreshAfterAction();}
     catch(e){errorText=String(e.message||e);busy=false;render();}
   }
   async function refreshAfterAction(){busy=false;await refresh();}
@@ -481,18 +506,18 @@
     if(added)void saveLedger();return added;
   }
   async function scanMail(){
-    if(typeof PDA_httpGet!=='function'){errorText='TornPDA HTTP bridge not available';render();return;}
+    const tornKey=String(window.prompt('Optional separate Torn API key for reading mail/events. Used only for this scan; not saved. Do not assume the FFScouter key is interchangeable.')||'').trim();if(!isKey(tornKey))return;
     busy=true;notice='Scanning message subjects and events…';render();let found=0,errs=[];
     for(const [name,url,field] of [['Messages','https://api.torn.com/v2/user/messages?limit=100','messages'],['Events','https://api.torn.com/v2/user/events?limit=100&striptags=true','events']]){
-      try{const r=await PDA_httpGet(url,{Authorization:'ApiKey '+apiKey,Accept:'application/json'});const d=JSON.parse(r.responseText||'{}');if(d.error)throw Error(d.error.error||d.error.message);for(const x of Array.isArray(d[field])?d[field]:[]){found+=recordReceipt(name==='Events'?x.event:x.topic,name+':'+String(x.id||x.timestamp))}}
+      try{const r=await sendHttp('GET',url,{Authorization:'ApiKey '+tornKey,Accept:'application/json'});const d=JSON.parse(r.responseText||'{}');if(d.error)throw Error(d.error.error||d.error.message);for(const x of Array.isArray(d[field])?d[field]:[]){found+=recordReceipt(name==='Events'?x.event:x.topic,name+':'+String(x.id||x.timestamp))}}
       catch(e){errs.push(name+': '+String(e.message||e));}
     }
     busy=false;notice='Matched '+found+' new references.';errorText=errs.join(' · ');render();
   }
-  function copyLedger(){const value=JSON.stringify({exported_at:new Date().toISOString(),claims:currentLedger.claims,receipts:currentLedger.receipts},null,2);if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(value).then(()=>{notice='Ledger copied.';render()}).catch(()=>window.prompt('Copy ledger',value));else window.prompt('Copy ledger',value);}
+  function copyLedger(){const value=JSON.stringify({schema_version:1,provider:'FFScouter',owner_player_id:ownerPlayer||null,exported_at:new Date().toISOString(),claims:currentLedger.claims,receipts:currentLedger.receipts},null,2);if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(value).then(()=>{notice='Ledger copied.';render()}).catch(()=>window.prompt('Copy ledger',value));else window.prompt('Copy ledger',value);}
   async function updateCheck(){
     tab='Settings';notice='Checking GitHub…';errorText='';render();
-    try{if(typeof PDA_httpGet!=='function')throw Error('TornPDA HTTP bridge unavailable');const r=await PDA_httpGet(ROOT_URL+'?v='+Date.now(),{Accept:'text/plain'});if(Number(r.status)!==200)throw Error('GitHub HTTP '+r.status);const ver=(String(r.responseText||'').match(/^\/\/\s*@version\s+(\d+(?:\.\d+)*)/m)||[])[1];if(!ver)throw Error('Version header not found');const newer=ver.split('.').some((x,i)=>Number(x)>Number(VERSION.split('.')[i]||0));notice=newer?'GitHub v'+ver+' available. Install through TornPDA script updates.':'Current version: v'+VERSION;}
+    try{const r=await sendHttp('GET',ROOT_URL+'?v='+Date.now(),{Accept:'text/plain'});if(Number(r.status)!==200)throw Error('GitHub HTTP '+r.status);const ver=(String(r.responseText||'').match(/^\/\/\s*@version\s+(\d+(?:\.\d+)*)/m)||[])[1];if(!ver)throw Error('Version header not found');const newer=ver.split('.').some((x,i)=>Number(x)>Number(VERSION.split('.')[i]||0));notice=newer?'GitHub v'+ver+' available. Install through TornPDA script updates.':'Current version: v'+VERSION;}
     catch(e){errorText=String(e.message||e);}render();
   }
   async function handleClick(e){
@@ -501,6 +526,7 @@
     const action=b.getAttribute('data-action');
     if(action==='close')setOpen(false);
     if(action==='refresh')void refresh();
+    if(action==='clear-pending'&&Date.now()-claimsCheckedAt<45000&&window.confirm('Review your refreshed claims first. Clearing this guard permits another request; it does not undo an earlier reservation.')){await setPending(null);render();}
     if(action==='update')void updateCheck();
     if(action==='dockleft'){setDock('left',dock.fraction);render();}
     if(action==='dockright'){setDock('right',dock.fraction);render();}
@@ -512,17 +538,19 @@
     if(action==='complete')void complete(Number(b.getAttribute('data-id')));
     if(action==='attack'){setOpen(false);return;} // native <a href> opens same TornPDA tab
     if(action==='locate-target')void locateTarget(b.getAttribute('data-order'),b.getAttribute('data-claim-id'));
-    if(action==='forget'){apiKey='';setSession('');await nativeDelete(KEY_STORAGE);activateLedger();tab='Settings';render();}
+    if(action==='forget'&&pending()){errorText='Reconcile the pending request before forgetting its key.';render();return;}
+    if(action==='forget'){ownerPlayer=0;apiKey='';setSession('');await nativeDelete(KEY_STORAGE);activateLedger();tab='Settings';render();}
     if(action==='export')copyLedger();
     if(action==='scanmail')void scanMail();
     if(action==='match'){const value=panel.querySelector('#ff-receipt')?.value||'';notice='Matched '+recordReceipt(value,'paste:'+Date.now())+' known claims. Message text not stored.';render();}
   }
   async function loadState(){
     apiKey=getSession();
+    pendingAll=await nativeGet(PENDING_STORAGE,{});if(!pendingAll||typeof pendingAll!=='object')pendingAll={};
     ledgerAll=await nativeGet(LEDGER_STORAGE,{});if(!ledgerAll||typeof ledgerAll!=='object')ledgerAll={};
     const saved=await nativeGet(KEY_STORAGE,'');
     if(isKey(saved)){remember=true;if(!isKey(apiKey))apiKey=saved;}
-    const pda='###PDA-APIKEY###';if(!isKey(apiKey)&&isKey(pda))apiKey=pda;
+    // Seller credentials are entered explicitly; never silently forward TornPDA's Torn key.
     activateLedger();
     render();
     if(isKey(apiKey)&&opened)void refresh();
