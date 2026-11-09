@@ -1,3 +1,13 @@
+## v0.9.2 — restore the confirmed working launcher layout
+Reviewed the original **Create Loss Contract Script** conversation and repository history. Injection had already been established; the launcher was visible before later updates. The precise iPhone rendering failure is still not captured.
+
+- Restores v0.7.0's original floating-button CSS as the default, above the bottom toolbar rather than in the chat bar.
+- Classic mode does not depend on saved side-tab coordinates or visual-viewport position calculations.
+- Retains the current seller API, target retention, request safeguards, credentials, history and independent Commander/mobile operation.
+- Draggable side tab remains optional under Settings > Launcher. Restore classic FF launcher is also available in script menus where supported.
+- No need to repeat the injection test simply because the icon disappeared after an update. Update the existing script to v0.9.2 and reopen Torn. If still absent, an actual device screenshot/version or rendering diagnostic is needed; simulated tests do not prove visibility on the phone.
+- Offline tests verify original launcher CSS, stale dock settings isolation, classic/side switching, reset, existing drag/viewport/lifecycle and contract regressions.
+
 ## v0.9.1 — mobile launcher recovery
 - Mounts the launcher and flyout beside the page body, reducing clipping from transformed/hidden page containers.
 - Repairs an orphaned same-version launcher instead of returning before click handlers exist; disposes the old lifecycle on an in-page update so stale timers cannot recreate old tabs.
@@ -62,7 +72,7 @@ The position is saved separately from API credentials and the payout ledger, usi
 
 A personal-use FFScouter loss-contract dashboard that runs inside the TornPDA browser, with contracts, claiming, payout reconciliation, and a GitHub update check.
 
-## Current release: v0.9.1
+## Current release: v0.9.2
 
 The installer URL remains the same:
 

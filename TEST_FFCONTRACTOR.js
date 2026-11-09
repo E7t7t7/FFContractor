@@ -1,6 +1,6 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const source=fs.readFileSync('FFContractor.user.js','utf8');
-assert(source.includes('@version      0.9.1')&&source.includes("const VERSION = '0.9.1'"));
+assert(source.includes('@version      0.9.2')&&source.includes("const VERSION = '0.9.2'"));
 for(const tag of ['@updateURL','@downloadURL'])assert(new RegExp(tag+'\\s+https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js').test(source));
 function harness(storage=new Map(),view={}){
  class Node{
@@ -31,12 +31,18 @@ function harness(storage=new Map(),view={}){
 }
 (async()=>{
  for(const view of [{},{innerWidth:900,innerHeight:1400,visualViewport:{width:320,height:500,offsetLeft:120,offsetTop:200}},{innerWidth:260,innerHeight:300}]){
-  const h=harness(new Map(),view),t=h.test,v=h.context.visualViewport;
+  const h=harness(new Map(),view),t=h.test,v=h.context.visualViewport;h.context.__FFContractor.setMode('side');
   const left=parseFloat(t.launch.style.left),top=parseFloat(t.launch.style.top);
   assert(left>=v.offsetLeft&&left+42<=v.offsetLeft+v.width,'launcher off visible viewport');assert(top>=v.offsetTop&&top+64<=v.offsetTop+v.height);
   t.launch.remove();t.mount();assert(t.launch.isConnected,'launcher remount failed');
  }
- const h=harness();let t=h.test;
+ const fresh=harness(new Map([['ffcontractor-tab-position-v2',JSON.stringify({side:'right',fraction:0.92})]]));
+ assert.equal(fresh.context.__FFContractor.diagnostic().launcherMode,'classic','Old dock coordinates replaced working default');
+ assert(fresh.test.launch.style.cssText.includes('bottom:calc(104px')&&fresh.test.launch.style.cssText.includes('width:62px'),'Known v0.7 launcher CSS not restored');
+ assert.equal(fresh.test.launch.textContent,'⚔ FF');
+ fresh.context.__FFContractor.setMode('side');assert.equal(fresh.context.__FFContractor.diagnostic().launcherMode,'side');
+ fresh.context.__FFContractor.reset();assert.equal(fresh.context.__FFContractor.diagnostic().launcherMode,'classic');
+ const h=harness();let t=h.test;h.context.__FFContractor.setMode('side');
  const event=(x,y)=>({button:0,pointerId:1,clientX:x,clientY:y,preventDefault(){}});
  t.launch.events.pointerdown(event(380,400));t.launch.events.pointermove(event(10,260));t.launch.events.pointerup(event(10,260));
  assert(t.launch.events.touchstart&&t.launch.events.touchmove,'Legacy iOS touch fallback missing');

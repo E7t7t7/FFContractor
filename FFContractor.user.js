@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.9.1
+// @version      0.9.2
 // @description  FFScouter loss contracts in a lightweight TornPDA chat panel, with payouts and GitHub updates.
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -20,7 +20,7 @@
   'use strict';
   // Keep v0.7's proven plain-DOM launcher bootstrap and reinjection pattern.
   // Position recoverability is handled independently of FFScouter API startup.
-  const VERSION = '0.9.1';
+  const VERSION = '0.9.2';
   const ROOT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const API = 'https://ffscouter.com/api/v1/losses/seller';
   const ID = 'ffcontractor-launcher';
@@ -36,10 +36,12 @@
   const launch = document.createElement('button');
   launch.id = ID;
   launch.type = 'button';
-  launch.textContent = '⚔\nFF';
+  launch.textContent = '⚔ FF';
   launch.title = 'FFContractor v' + VERSION;
   launch.setAttribute('data-ff-version', VERSION);
-  launch.style.cssText = 'all:initial!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;justify-content:center!important;position:fixed!important;right:0!important;left:auto!important;top:50%!important;bottom:auto!important;width:42px!important;height:64px!important;padding:0!important;margin:0!important;white-space:pre!important;text-align:center!important;line-height:22px!important;background:linear-gradient(180deg,#1b789a,#10445f)!important;color:#fff!important;font:bold 14px -apple-system,system-ui,sans-serif!important;border:1px solid #4c91ac!important;border-radius:12px 0 0 12px!important;box-shadow:0 2px 12px #0009,inset 0 1px 0 #ffffff22!important;z-index:2147483647!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;cursor:grab!important;user-select:none!important;-webkit-user-select:none!important;touch-action:none!important;';
+  const CLASSIC_STYLE='all:initial!important;display:flex!important;align-items:center!important;justify-content:center!important;position:fixed!important;left:10px!important;bottom:calc(104px + env(safe-area-inset-bottom,0px))!important;width:62px!important;height:45px!important;background:#125a7b!important;color:#fff!important;font:bold 16px -apple-system,system-ui,sans-serif!important;border:2px solid #6ac9ee!important;border-radius:12px!important;box-shadow:0 5px 16px #0009!important;z-index:2147483647!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;touch-action:manipulation!important;';
+  const SIDE_STYLE='all:initial!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;justify-content:center!important;position:fixed!important;right:0!important;left:auto!important;top:50%!important;bottom:auto!important;width:42px!important;height:64px!important;padding:0!important;margin:0!important;white-space:pre!important;text-align:center!important;line-height:22px!important;background:linear-gradient(180deg,#1b789a,#10445f)!important;color:#fff!important;font:bold 14px -apple-system,system-ui,sans-serif!important;border:1px solid #4c91ac!important;border-radius:12px 0 0 12px!important;box-shadow:0 2px 12px #0009,inset 0 1px 0 #ffffff22!important;z-index:2147483647!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;cursor:grab!important;user-select:none!important;-webkit-user-select:none!important;touch-action:none!important;';
+  launch.style.cssText=CLASSIC_STYLE;
 
   // Store only side and proportional vertical position, never absolute pixels.
   // This survives orientation changes and stays separate from the payout ledger.
@@ -47,6 +49,15 @@
   // coordinates are intentionally ignored. API key and payout keys are unchanged.
   const DOCK_KEY = 'ffcontractor-tab-position-v2';
   const DOCK_DEFAULT = {side:'right', fraction:0.52};
+  const MODE_KEY='ffcontractor-launcher-mode-v1';
+  let launcherMode='classic';
+  try{if(localStorage.getItem(MODE_KEY)==='side')launcherMode='side';}catch(_){}
+  function setMode(mode){
+    launcherMode=mode==='side'?'side':'classic';
+    try{localStorage.setItem(MODE_KEY,launcherMode);}catch(_){}
+    drag=null;placeLauncher();placePanel();
+  }
+
   const clamp = (n,lo,hi) => Math.min(hi,Math.max(lo,n));
   function sanitizeDock(raw) {
     return raw && (raw.side==='left'||raw.side==='right') && Number.isFinite(Number(raw.fraction))
@@ -80,6 +91,8 @@
   }
   function placeLauncher() {
     if(drag) return;
+    if(launcherMode==='classic'){launch.style.cssText=CLASSIC_STYLE;launch.textContent='⚔ FF';return;}
+    launch.style.cssText=SIDE_STYLE;launch.textContent='⚔\nFF';
     const v=viewport(), x=dock.side==='left'?v.x:Math.max(v.x,v.x+v.w-42);
     // Use pixel X rather than CSS right:0 (which can be outside the
     // visible area in a zoomed TornPDA WebView).
@@ -102,6 +115,7 @@
     } catch (_) {}
   }
   function setDock(side,fraction) {
+    launcherMode='side';try{localStorage.setItem(MODE_KEY,'side');}catch(_){}
     dock=sanitizeDock({side:side,fraction:fraction});
     saveDock();placeLauncher();placePanel();
   }
@@ -115,6 +129,7 @@
     } catch (_) {}
   }
   launch.addEventListener('pointerdown',e=>{
+    if(launcherMode!=='side')return;
     if(e.button!==undefined && e.button!==0)return;
     const rect=launch.getBoundingClientRect(), v=viewport();
     drag={id:e.pointerId,x:e.clientX,y:e.clientY,
@@ -159,7 +174,7 @@
 
   if(!('PointerEvent' in window)){
     const touchEvent=(e,end)=>{const t=(end?e.changedTouches:e.touches)[0];return t?{pointerId:1,button:0,clientX:t.clientX,clientY:t.clientY,preventDefault:()=>e.preventDefault()}:null;};
-    launch.addEventListener('touchstart',e=>{const t=touchEvent(e,false);if(t){const r=launch.getBoundingClientRect();drag={id:1,x:t.clientX,y:t.clientY,left:r.left,top:r.top,moved:false,started:Date.now()};}},{passive:true});
+    launch.addEventListener('touchstart',e=>{if(launcherMode!=='side')return;const t=touchEvent(e,false);if(t){const r=launch.getBoundingClientRect();drag={id:1,x:t.clientX,y:t.clientY,left:r.left,top:r.top,moved:false,started:Date.now()};}},{passive:true});
     launch.addEventListener('touchmove',e=>{const t=touchEvent(e,false);if(!t||!drag)return;const v=viewport(),dx=t.clientX-drag.x,dy=t.clientY-drag.y;if(Math.hypot(dx,dy)>7)drag.moved=true;if(drag.moved){e.preventDefault();launch.style.setProperty('left',Math.round(clamp(drag.left+dx,v.x,v.x+v.w-42))+'px','important');launch.style.setProperty('top',Math.round(clamp(drag.top+dy,v.y+12,v.y+v.h-76))+'px','important');}},{passive:false});
     launch.addEventListener('touchend',e=>{const t=touchEvent(e,true);if(t)finishDrag(t,false);});
     launch.addEventListener('touchcancel',e=>{const t=touchEvent(e,true);if(t)finishDrag(t,true);});
@@ -347,10 +362,10 @@
     const v=viewport(), width=Math.round(Math.max(180,Math.min(460,v.w-60)));
     const height=Math.round(Math.max(180,Math.min(690,v.h*0.68,v.h-24)));
     const top=Math.round(clamp(launcherTop()+32-height*0.53,v.y+12,Math.max(v.y+12,v.y+v.h-height-12)));
-    const left=Math.round(dock.side==='left'?v.x+48:v.x+v.w-48-width);
+    const left=Math.round(launcherMode==='classic'?v.x+10:dock.side==='left'?v.x+48:v.x+v.w-48-width);
     panel.style.setProperty('width',width+'px','important');
     panel.style.setProperty('height',height+'px','important');
-    panel.style.setProperty('top',top+'px','important');
+    panel.style.setProperty('top',(launcherMode==='classic'?Math.max(v.y+12,v.y+v.h-104-45-height-10):top)+'px','important');
     panel.style.setProperty('bottom','auto','important');
     panel.style.setProperty('left',left+'px','important');
     panel.style.setProperty('right','auto','important');
@@ -399,7 +414,7 @@
       if(currentLedger.receipts.length)html+=`<div class="ff-small">${currentLedger.receipts.length} matched message references retained locally.</div>`;
     } else {
       html+=`<div class="ff-card"><div><strong>FFScouter API key</strong></div><div class="ff-row"><input id="ff-api-key" type="password" placeholder="16-character key" autocomplete="off" value="${esc(apiKey)}" style="width:100%"><button class="ff-primary" data-action="connect">${isKey(apiKey)?'Reconnect':'Connect'}</button></div><label class="ff-small"><input id="ff-remember" type="checkbox" ${remember?'checked':''}> Remember key on this device</label></div>`;
-      html+=`<div class="ff-card"><strong>Tab position</strong><p class="ff-small">Drag the blue FF handle up, down, or across the screen to switch sides. Tap it to open the panel.</p><div class="ff-row"><button data-action="dockleft">${dock.side==='left'?'✓ ':''}Left</button><button data-action="dockright">${dock.side==='right'?'✓ ':''}Right</button><button data-action="dockreset">Reset</button></div></div>`;
+      html+=`<div class="ff-card"><strong>Launcher</strong><p class="ff-small">Classic floating button is the previously working layout, above the bottom toolbar. Draggable side tab is optional. Switching back to Classic ignores saved side coordinates; credentials and history stay intact.</p><div class="ff-row"><button data-action="classiclauncher">Classic floating</button><button data-action="sidelauncher">Draggable side</button></div><p class="ff-small">Side-tab position:</p><div class="ff-row"><button data-action="dockleft">${dock.side==='left'?'✓ ':''}Left</button><button data-action="dockright">${dock.side==='right'?'✓ ':''}Right</button><button data-action="dockreset">Reset</button></div></div>`;
       html+=`<div class="ff-card"><strong>GitHub updates</strong><p class="ff-small">Installed v${VERSION}. TornPDA handles updates from your original remote URL.</p><button data-action="update">Check GitHub for updates</button></div>`;
       html+='<div class="ff-card"><a href="https://ffscouter.com/sell-losses">Seller rules / data policy</a> · <a href="https://ffscouter.com/api-docs/guidance">API guidance</a><p class="ff-small">Standalone in TornPDA or optional inside Commander. The desktop can watch NEW claims when explicitly armed; no PC is required for mobile use. Older phone history is not automatically copied. Consider FFScouter premium to support the provider.</p></div>';
       html+='<button data-action="forget">Forget API key</button>';
@@ -541,6 +556,8 @@
     if(action==='refresh')void refresh();
     if(action==='clear-pending'&&Date.now()-claimsCheckedAt<45000&&window.confirm('Review your refreshed claims first. Clearing this guard permits another request; it does not undo an earlier reservation.')){await setPending(null);render();}
     if(action==='update')void updateCheck();
+    if(action==='classiclauncher'){setMode('classic');render();}
+    if(action==='sidelauncher'){setMode('side');render();}
     if(action==='dockleft'){setDock('left',dock.fraction);render();}
     if(action==='dockright'){setDock('right',dock.fraction);render();}
     if(action==='dockreset'){setDock(DOCK_DEFAULT.side,DOCK_DEFAULT.fraction);render();}
@@ -582,12 +599,13 @@
   window.__FFContractor={
     version:VERSION,ready:true,mount,
     show(){mount();setOpen(true);if(!loadState.done){loadState.done=true;void loadState().catch(e=>{errorText='Startup issue: '+String(e.message||e);render();});}},
-    reset(){setDock(DOCK_DEFAULT.side,DOCK_DEFAULT.fraction);mount();},
-    diagnostic(){return {version:VERSION,launcherAttached:!!launch.isConnected,panelOpen:opened,bridge:typeof PDA_httpGet==='function'?'TornPDA':typeof GM_xmlhttpRequest==='function'?'Commander':'unavailable',viewport:viewport()};},
+    reset(){setMode('classic');mount();},
+    setMode,
+    diagnostic(){return {version:VERSION,launcherMode,launcherAttached:!!launch.isConnected,panelOpen:opened,bridge:typeof PDA_httpGet==='function'?'TornPDA':typeof GM_xmlhttpRequest==='function'?'Commander':'unavailable',viewport:viewport()};},
     dispose(){disposed=true;timers.forEach(clearInterval);if(mountObserver)mountObserver.disconnect();launch.remove();if(panel)panel.remove();}
   };
   if(typeof GM_registerMenuCommand==='function'){
     GM_registerMenuCommand('Open FFContractor',()=>window.__FFContractor.show());
-    GM_registerMenuCommand('Reset FF tab position',()=>window.__FFContractor.reset());
+    GM_registerMenuCommand('Restore classic FF launcher',()=>window.__FFContractor.reset());
   }
 })();
