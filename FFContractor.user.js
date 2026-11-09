@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.9.0
+// @version      0.9.1
 // @description  FFScouter loss contracts in a lightweight TornPDA chat panel, with payouts and GitHub updates.
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -20,12 +20,17 @@
   'use strict';
   // Keep v0.7's proven plain-DOM launcher bootstrap and reinjection pattern.
   // Position recoverability is handled independently of FFScouter API startup.
-  const VERSION = '0.9.0';
+  const VERSION = '0.9.1';
   const ROOT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const API = 'https://ffscouter.com/api/v1/losses/seller';
   const ID = 'ffcontractor-launcher';
   const old = document.getElementById(ID);
-  if (old && old.getAttribute('data-ff-version') === VERSION) return;
+  const previous=window.__FFContractor;
+  if(old&&old.getAttribute('data-ff-version')===VERSION&&previous&&previous.ready&&typeof old.onclick==='function'){previous.mount();return;}
+  if(previous&&typeof previous.dispose==='function')previous.dispose();
+  let disposed=false;const timers=[];
+  function every(fn,ms){const id=setInterval(()=>{if(!disposed)fn();},ms);timers.push(id);return id;}
+
   if (old) old.remove();
 
   const launch = document.createElement('button');
@@ -152,8 +157,16 @@
   });
 
 
+  if(!('PointerEvent' in window)){
+    const touchEvent=(e,end)=>{const t=(end?e.changedTouches:e.touches)[0];return t?{pointerId:1,button:0,clientX:t.clientX,clientY:t.clientY,preventDefault:()=>e.preventDefault()}:null;};
+    launch.addEventListener('touchstart',e=>{const t=touchEvent(e,false);if(t){const r=launch.getBoundingClientRect();drag={id:1,x:t.clientX,y:t.clientY,left:r.left,top:r.top,moved:false,started:Date.now()};}},{passive:true});
+    launch.addEventListener('touchmove',e=>{const t=touchEvent(e,false);if(!t||!drag)return;const v=viewport(),dx=t.clientX-drag.x,dy=t.clientY-drag.y;if(Math.hypot(dx,dy)>7)drag.moved=true;if(drag.moved){e.preventDefault();launch.style.setProperty('left',Math.round(clamp(drag.left+dx,v.x,v.x+v.w-42))+'px','important');launch.style.setProperty('top',Math.round(clamp(drag.top+dy,v.y+12,v.y+v.h-76))+'px','important');}},{passive:false});
+    launch.addEventListener('touchend',e=>{const t=touchEvent(e,true);if(t)finishDrag(t,false);});
+    launch.addEventListener('touchcancel',e=>{const t=touchEvent(e,true);if(t)finishDrag(t,true);});
+  }
   function mount() {
-    const parent = document.body || document.documentElement;
+    if(disposed)return;
+    const parent = document.documentElement || document.body;
     if (parent && launch.parentNode !== parent) parent.appendChild(launch);
     if(drag && Date.now()-drag.started>6500) drag=null;
     placeLauncher();
@@ -172,11 +185,11 @@
   window.addEventListener('hashchange', mount);
   window.addEventListener('popstate', mount);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) mount(); });
-  setInterval(mount, 1500);
+  every(mount, 1500);
 
   let panel, status, tab = 'Overview', opened = false, apiKey = '', remember = false, busy = false;
   // Torn may replace its body after the modal has already opened.
-  setInterval(() => {
+  every(() => {
     if (opened && panel && !panel.isConnected) { buildPanel(); render(); }
     else if (opened && panel) placePanel();
   }, 1900);
@@ -184,7 +197,7 @@
   let pendingAll={},claimsCheckedAt=0,ownerPlayer=0;
   const PENDING_STORAGE='ffcontractor-pending-v1';
   const pending=()=>pendingAll[hash(apiKey)];
-  async function setPending(value){if(value)pendingAll[hash(apiKey)]=value;else delete pendingAll[hash(apiKey)];await nativeSet(PENDING_STORAGE,pendingAll);if(value){const saved=await nativeGet(PENDING_STORAGE,{});if(saved[hash(apiKey)]?.nonce!==value.nonce)throw Error('Could not save the request guard. No reservation sent.');}}
+  async function setPending(value){if(value)pendingAll[hash(apiKey)]=value;else delete pendingAll[hash(apiKey)];await nativeSet(PENDING_STORAGE,pendingAll);if(value){const saved=await nativeGet(PENDING_STORAGE,{});if(!saved[hash(apiKey)]||saved[hash(apiKey)].nonce!==value.nonce)throw Error('Could not save the request guard. No reservation sent.');}}
   let ledgerAll = {}, currentLedger = {claims:{},receipts:[]};
   const KEY_STORAGE = 'ffscouter-loss-desk-key-v1';
   const LEDGER_STORAGE = 'ffscouter-loss-desk-ledger-v2';
@@ -347,7 +360,7 @@
     if(panel && panel.isConnected) return;
     panel=document.createElement('div');panel.id='ffcontractor-panel';
     panel.innerHTML=`<div class="ff-top"><strong style="flex:1">⚔ FFContractor <span class="ff-small">v${VERSION}</span></strong><button data-action="refresh">↻</button><button data-action="update">⇧</button><button data-action="close">✕</button></div><div class="ff-tabs">${['Overview','Contracts','Payouts','Settings'].map(x=>`<button data-tab="${x}">${x}</button>`).join('')}</div><div class="ff-scroll"></div>`;
-    (document.body || document.documentElement).appendChild(panel);
+    (document.documentElement || document.body).appendChild(panel);
     panel.addEventListener('click', handleClick);
     placePanel();
   }
@@ -435,7 +448,7 @@
   }
   async function refresh() {
     if(busy||!isKey(apiKey))return;busy=true;notice='Loading FFScouter…';errorText='';render();
-    const results=await Promise.allSettled([request('GET','/contracts'),request('GET','/claims')]);
+    const results=await Promise.all([request('GET','/contracts'),request('GET','/claims')].map(p=>p.then(value=>({status:'fulfilled',value}),reason=>({status:'rejected',reason}))));
     const fails=[];
     if(results[0].status==='fulfilled'){
       const obj=results[0].value;contracts=Array.isArray(obj.contracts)?obj.contracts:[];cap=Math.max(0,Number(obj.max_claim_slots)||0);
@@ -448,9 +461,9 @@
   }
   async function connect(){
     if(busy||pending()){errorText="Reconcile the current request before changing seller accounts.";render();return;}
-    const key=String(panel.querySelector('#ff-api-key')?.value||'').trim();
+    const key=String((panel.querySelector('#ff-api-key')||{}).value||'').trim();
     if(!isKey(key)){errorText='API key must be 16 letters/numbers.';render();return;}
-    ownerPlayer=0;apiKey=key;remember=!!panel.querySelector('#ff-remember')?.checked;
+    ownerPlayer=0;apiKey=key;remember=!!(panel.querySelector('#ff-remember')||{}).checked;
     setSession(key);activateLedger();if(remember)await nativeSet(KEY_STORAGE,key);else await nativeDelete(KEY_STORAGE);
     try{const identity=await request('GET','/account/balance',null,'https://ffscouter.com/api/v1');ownerPlayer=positiveTornId(identity.player_id);}catch(_){}tab='Overview';await refresh();
   }
@@ -467,7 +480,7 @@
     if(!window.confirm('Reserve '+count+' losses on '+order+'? FFScouter starts its claim timers immediately.'))return;
     busy=true;render();
     try{await setPending({type:'claim',order,known:claims.map(x=>String(x.id)),at:Math.floor(Date.now()/1000),nonce:Date.now()+'-'+Math.random()});const r=await request('POST','/claim',{order_number:order,slots:count});
-      if(!r.claim||!positiveTornId(r.claim.target_player_id)||!Number.isSafeInteger(Number(r.claim.id))||Number(r.claim.id)<=0||(pending()?.known||[]).includes(String(r.claim.id))||Number(r.claim.slots_claimed)<1||Number(r.claim.slots_claimed)>count||String(r.claim.order_number)!==order)throw Error('Reservation response incomplete; refresh to reconcile.');notice='Claim reserved. If Commander is armed at home it can discover this claim; avoid attacking it on both devices at once.';errorText='';if(r.claim){const fresh=claimWithTarget({...r.claim,state:r.claim.state||'active',claimed_at:r.claim.claimed_at||Math.floor(Date.now()/1000),price_per_loss:c.price_per_loss,order_number:r.claim.order_number||order});mergeLedger([fresh]);claims=[fresh,...claims.filter(x=>String(x.id)!==String(fresh.id))];}await saveLedger();await setPending(null);await refreshAfterAction();}
+      if(!r.claim||!positiveTornId(r.claim.target_player_id)||!Number.isSafeInteger(Number(r.claim.id))||Number(r.claim.id)<=0||((pending()||{}).known||[]).includes(String(r.claim.id))||Number(r.claim.slots_claimed)<1||Number(r.claim.slots_claimed)>count||String(r.claim.order_number)!==order)throw Error('Reservation response incomplete; refresh to reconcile.');notice='Claim reserved. If Commander is armed at home it can discover this claim; avoid attacking it on both devices at once.';errorText='';if(r.claim){const fresh=claimWithTarget({...r.claim,state:r.claim.state||'active',claimed_at:r.claim.claimed_at||Math.floor(Date.now()/1000),price_per_loss:c.price_per_loss,order_number:r.claim.order_number||order});mergeLedger([fresh]);claims=[fresh,...claims.filter(x=>String(x.id)!==String(fresh.id))];}await saveLedger();await setPending(null);await refreshAfterAction();}
     catch(e){errorText=String(e.message||e);busy=false;render();}
   }
   async function locateTarget(order,claimId) {
@@ -475,8 +488,8 @@
     notice='Checking FFScouter for target details…';errorText='';render();
     try {
       const data=await request('GET','/orders/'+encodeURIComponent(order));
-      const candidates=[data,data?.order,data?.contract,data?.claim,
-        ...(Array.isArray(data?.claims)?data.claims.filter(c=>String(c.id)===String(claimId)):[])];
+      const candidates=[data,(data||{}).order,(data||{}).contract,(data||{}).claim,
+        ...(Array.isArray((data||{}).claims)?data.claims.filter(c=>String(c.id)===String(claimId)):[])];
       const id=candidates.map(targetIdFrom).find(Boolean)||0;
       if(!id) throw Error('FFScouter returned no usable target ID. Use its Target link for this contract.');
       const item=claims.find(c=>String(c.id)===String(claimId));
@@ -542,7 +555,7 @@
     if(action==='forget'){ownerPlayer=0;apiKey='';setSession('');await nativeDelete(KEY_STORAGE);activateLedger();tab='Settings';render();}
     if(action==='export')copyLedger();
     if(action==='scanmail')void scanMail();
-    if(action==='match'){const value=panel.querySelector('#ff-receipt')?.value||'';notice='Matched '+recordReceipt(value,'paste:'+Date.now())+' known claims. Message text not stored.';render();}
+    if(action==='match'){const value=(panel.querySelector('#ff-receipt')||{}).value||'';notice='Matched '+recordReceipt(value,'paste:'+Date.now())+' known claims. Message text not stored.';render();}
   }
   async function loadState(){
     apiKey=getSession();
@@ -563,5 +576,18 @@
     }catch(e){launch.textContent='FF !';window.alert('FFContractor error: '+String(e.message||e));}
   };
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&opened)setOpen(false)});
-  setInterval(()=>{if(opened&&panel&&panel.isConnected&&isKey(apiKey)&&Date.now()-lastSync>25000)void refresh();},30000);
+  every(()=>{if(opened&&panel&&panel.isConnected&&isKey(apiKey)&&Date.now()-lastSync>25000)void refresh();},30000);
+  let mountObserver=null;
+  if(typeof MutationObserver==='function'&&document.documentElement){mountObserver=new MutationObserver(()=>{if(!disposed)mount();});mountObserver.observe(document.documentElement,{childList:true});}
+  window.__FFContractor={
+    version:VERSION,ready:true,mount,
+    show(){mount();setOpen(true);if(!loadState.done){loadState.done=true;void loadState().catch(e=>{errorText='Startup issue: '+String(e.message||e);render();});}},
+    reset(){setDock(DOCK_DEFAULT.side,DOCK_DEFAULT.fraction);mount();},
+    diagnostic(){return {version:VERSION,launcherAttached:!!launch.isConnected,panelOpen:opened,bridge:typeof PDA_httpGet==='function'?'TornPDA':typeof GM_xmlhttpRequest==='function'?'Commander':'unavailable',viewport:viewport()};},
+    dispose(){disposed=true;timers.forEach(clearInterval);if(mountObserver)mountObserver.disconnect();launch.remove();if(panel)panel.remove();}
+  };
+  if(typeof GM_registerMenuCommand==='function'){
+    GM_registerMenuCommand('Open FFContractor',()=>window.__FFContractor.show());
+    GM_registerMenuCommand('Reset FF tab position',()=>window.__FFContractor.reset());
+  }
 })();

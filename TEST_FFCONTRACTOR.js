@@ -1,6 +1,6 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const source=fs.readFileSync('FFContractor.user.js','utf8');
-assert(source.includes('@version      0.9.0')&&source.includes("const VERSION = '0.9.0'"));
+assert(source.includes('@version      0.9.1')&&source.includes("const VERSION = '0.9.1'"));
 for(const tag of ['@updateURL','@downloadURL'])assert(new RegExp(tag+'\\s+https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js').test(source));
 function harness(storage=new Map(),view={}){
  class Node{
@@ -18,7 +18,7 @@ function harness(storage=new Map(),view={}){
  const document={body,documentElement:root,readyState:'complete',createElement:t=>new Node(t),getElementById:id=>walk(root,id),addEventListener:()=>{}};
  const localStorage={getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)};
  const intervals=[],calls=[];let responder=(m,u,b)=>({status:200,responseText:JSON.stringify(u.includes('/contracts')?{contracts:[],max_claim_slots:10}:{claims:[]})});
- const context={document,localStorage,sessionStorage:localStorage,URL,console,Date,Math,navigator:{},setInterval:fn=>intervals.push(fn),setTimeout:()=>{},clearTimeout:()=>{},innerWidth:400,innerHeight:800,addEventListener:()=>{},confirm:()=>true,...view};
+ const context={document,localStorage,sessionStorage:localStorage,URL,console,Date,Math,navigator:{},setInterval:fn=>intervals.push(fn),setTimeout:()=>{},clearTimeout:()=>{},clearInterval:()=>{},innerWidth:400,innerHeight:800,addEventListener:()=>{},confirm:()=>true,...view};
  context.window=context;context.visualViewport={width:context.innerWidth,height:context.innerHeight,offsetLeft:0,offsetTop:0,addEventListener:()=>{},...(view.visualViewport||{})};
  context.PDA_httpGet=async(u,h)=>{calls.push({method:'GET',url:u});return responder('GET',u)};
  context.PDA_httpPost=async(u,h,b)=>{calls.push({method:'POST',url:u,body:JSON.parse(b)});return responder('POST',u,b)};
@@ -27,7 +27,7 @@ function harness(storage=new Map(),view={}){
  "setup(x={}){apiKey=x.key||'0123456789ABCDEF';activateLedger();contracts=x.contracts||[];claims=x.claims||[];cap=x.cap??10;lastSync=Date.now();claimsCheckedAt=x.stale?Date.now()-60000:Date.now();busy=false;render=()=>{};panel={querySelectorAll:()=>[{getAttribute:()=>x.order||'ORDER-A',value:x.count||2}]};},",
  'state:()=>({claims,currentLedger,errorText,busy,pending:pending()}),loadPending:async()=>{pendingAll=await nativeGet(PENDING_STORAGE,{})}};'].join('\n');
  vm.runInNewContext(source.replace(/\}\)\(\);\s*$/,expose+'\n})();'),context);
- return {test:context.test,context,storage,intervals,calls,respond:fn=>responder=fn};
+ return {test:context.test,context,storage,intervals,calls,respond:fn=>responder=fn,reinject:()=>vm.runInNewContext(source.replace(/\}\)\(\);\s*$/,expose+'\n})();'),context)};
 }
 (async()=>{
  for(const view of [{},{innerWidth:900,innerHeight:1400,visualViewport:{width:320,height:500,offsetLeft:120,offsetTop:200}},{innerWidth:260,innerHeight:300}]){
@@ -36,9 +36,21 @@ function harness(storage=new Map(),view={}){
   assert(left>=v.offsetLeft&&left+42<=v.offsetLeft+v.width,'launcher off visible viewport');assert(top>=v.offsetTop&&top+64<=v.offsetTop+v.height);
   t.launch.remove();t.mount();assert(t.launch.isConnected,'launcher remount failed');
  }
- const h=harness(),t=h.test;
+ const h=harness();let t=h.test;
  const event=(x,y)=>({button:0,pointerId:1,clientX:x,clientY:y,preventDefault(){}});
  t.launch.events.pointerdown(event(380,400));t.launch.events.pointermove(event(10,260));t.launch.events.pointerup(event(10,260));
+ assert(t.launch.events.touchstart&&t.launch.events.touchmove,'Legacy iOS touch fallback missing');
+ assert(h.context.__FFContractor.ready&&h.context.__FFContractor.diagnostic().launcherAttached);
+ const mounted=t.launch;
+ h.reinject();assert.strictEqual(h.context.test.launch,mounted,'Healthy reinjection duplicated tab');
+ const oldTimers=h.intervals.slice();
+ mounted.onclick=null;h.reinject();assert.notStrictEqual(h.context.test.launch,mounted,'Orphaned tab prevented recovery');t=h.context.test;
+ oldTimers.forEach(fn=>fn());assert(!mounted.isConnected,'Disposed launcher was recreated by an old timer');
+ assert.strictEqual(h.context.document.getElementById('ffcontractor-launcher'),t.launch);
+ const touch=(x,y)=>({touches:[{clientX:x,clientY:y}],changedTouches:[{clientX:x,clientY:y}],preventDefault(){}});
+ t.launch.events.touchstart(touch(10,250));t.launch.events.touchmove(touch(20,300));t.launch.events.touchend(touch(20,300));
+ assert.equal(JSON.parse(h.storage.get('ffcontractor-tab-position-v2')).side,'left','Legacy touch drag did not persist');
+
  const reload=harness(h.storage);assert.strictEqual(parseFloat(reload.test.launch.style.left),0,'drag position not persisted');
  t.setup();t.mergeLedger([{id:42,order_number:'ORDER-A',target_player_id:3003,slots_delivered:2,earnings:700000}]);
  assert.strictEqual(t.claimWithTarget({id:42}).target_player_id,3003);
@@ -66,5 +78,6 @@ function harness(storage=new Map(),view={}){
  delete restart.context.PDA_httpGet;let gm=false;
  restart.context.GM_xmlhttpRequest=r=>{gm=true;r.onload({status:200,responseText:'{}'})};
  await restart.test.sendHttp('GET','https://ffscouter.com/api/v1/check-key',{});assert(gm,'Commander HTTP fallback missing');
+ assert(!source.includes('?.')&&!source.includes('Promise.allSettled'),'Older WebKit unsupported dependency returned');
  console.log('FFCONTRACTOR PASSED: viewport/remount/drag persistence, target retention, 8 statistics, payment evidence, bounded Claim Max, active/stale guards, interrupted restart and desktop transport. Simulated only.');
 })().catch(e=>{console.error(e);process.exitCode=1});

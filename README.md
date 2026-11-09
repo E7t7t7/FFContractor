@@ -1,3 +1,13 @@
+## v0.9.1 — mobile launcher recovery
+- Mounts the launcher and flyout beside the page body, reducing clipping from transformed/hidden page containers.
+- Repairs an orphaned same-version launcher instead of returning before click handlers exist; disposes the old lifecycle on an in-page update so stale timers cannot recreate old tabs.
+- Remounts after top-level page replacements and retains viewport/position controls. Adds touch dragging for older iOS without PointerEvent.
+- Removes optional-chaining syntax and Promise.allSettled dependency for older WebKit compatibility; no API keys are read during launcher startup.
+- Where supported, script menus provide Open FFContractor and Reset FF tab position.
+- Same install/update URL and independent phone operation. Contracts and payout behavior preserved.
+- Root cause on the user's iPhone is not confirmed. Offline tests cover these recovery paths; a script cannot repair TornPDA failing to inject it.
+- If no tab appears: update from the existing raw URL in TornPDA Scripts, enable the script for Torn, choose END injection, then reopen a Torn page. Run FFContractor-Diagnostic.user.js if still absent: FF TEST distinguishes injection failure from main UI failure. Do not delete your stored script data.
+
 ## v0.9.0 — coordinated Commander/mobile maintenance
 
 - Same standalone TornPDA launcher, draggable position and remount lifecycle retained.
@@ -52,7 +62,7 @@ The position is saved separately from API credentials and the payout ledger, usi
 
 A personal-use FFScouter loss-contract dashboard that runs inside the TornPDA browser, with contracts, claiming, payout reconciliation, and a GitHub update check.
 
-## Current release: v0.9.0
+## Current release: v0.9.1
 
 The installer URL remains the same:
 
