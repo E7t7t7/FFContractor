@@ -1,6 +1,6 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const source=fs.readFileSync('FFContractor.user.js','utf8');
-assert(source.includes('@version      0.9.3')&&source.includes("const VERSION = '0.9.3'"));
+assert(source.includes('@version      0.9.4')&&source.includes("const VERSION = '0.9.4'"));
 for(const tag of ['@updateURL','@downloadURL'])assert(new RegExp(tag+'\\s+https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js').test(source));
 // Reproduce TornPDA UserscriptsProvider.adaptSource, including its global smart-quote rewrite.
 function pdaAdapt(text){return ('(function(){const PDA_storage=window.__pdaStorageFactory&&window.__pdaStorageFactory("fixture-only");'+text+'}());').replace(/[“”]/g,'"').replace(/[‘’]/g,"'");}
@@ -11,6 +11,8 @@ function harness(storage=new Map(),view={}){
   constructor(tag){this.tagName=tag;this.children=[];this.attrs={};this.events={};this.style={setProperty:(k,v)=>this.style[k]=v};}
   setAttribute(k,v){this.attrs[k]=v}getAttribute(k){return this.attrs[k]??null}
   appendChild(n){n.remove();this.children.push(n);n.parentNode=this;return n}
+  insertBefore(n,ref){n.remove();const at=this.children.indexOf(ref);this.children.splice(at<0?0:at,0,n);n.parentNode=this;return n}
+  get firstChild(){return this.children[0]||null}
   remove(){if(this.parentNode)this.parentNode.children=this.parentNode.children.filter(x=>x!==this);this.parentNode=null}
   get isConnected(){return !!this.parentNode}
   addEventListener(k,fn){this.events[k]=fn}
@@ -19,7 +21,8 @@ function harness(storage=new Map(),view={}){
  }
  const root=new Node('html'),body=new Node('body');root.appendChild(body);
  const walk=(n,id)=>n.id===id?n:n.children.map(c=>walk(c,id)).find(Boolean);
- const document={body,documentElement:root,readyState:'complete',createElement:t=>new Node(t),getElementById:id=>walk(root,id),addEventListener:()=>{}};
+ let createdButtons=0;
+ const document={body,documentElement:root,readyState:'complete',createElement:t=>{if(t==='button'&&++createdButtons===3&&view.failMain)throw new TypeError('Synthetic failure');return new Node(t)},getElementById:id=>walk(root,id),addEventListener:()=>{}};
  const localStorage={getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)};
  const intervals=[],calls=[];let responder=(m,u,b)=>({status:200,responseText:JSON.stringify(u.includes('/contracts')?{contracts:[],max_claim_slots:10}:{claims:[]})});
  const context={document,localStorage,sessionStorage:localStorage,URL,console,Date,Math,navigator:{},setInterval:fn=>intervals.push(fn),setTimeout:()=>{},clearTimeout:()=>{},clearInterval:()=>{},innerWidth:400,innerHeight:800,addEventListener:()=>{},confirm:()=>true,...view};
@@ -30,8 +33,8 @@ function harness(storage=new Map(),view={}){
  'window.test={launch,mount,placeLauncher,setDock,targetIdFrom,tornIdFromUrl,claimWithTarget,attackLink,mergeLedger,paid,summarize,claim,complete,refresh,sendHttp,recordReceipt,pending,',
  "setup(x={}){apiKey=x.key||'0123456789ABCDEF';activateLedger();contracts=x.contracts||[];claims=x.claims||[];cap=x.cap??10;lastSync=Date.now();claimsCheckedAt=x.stale?Date.now()-60000:Date.now();busy=false;render=()=>{};panel={querySelectorAll:()=>[{getAttribute:()=>x.order||'ORDER-A',value:x.count||2}]};},",
  'state:()=>({claims,currentLedger,errorText,busy,pending:pending()}),loadPending:async()=>{pendingAll=await nativeGet(PENDING_STORAGE,{})}};'].join('\n');
- vm.runInNewContext(pdaAdapt(source.replace(/\}\)\(\);\s*$/,expose+'\n})();')),context);
- return {test:context.test,context,storage,intervals,calls,respond:fn=>responder=fn,reinject:()=>vm.runInNewContext(pdaAdapt(source.replace(/\}\)\(\);\s*$/,expose+'\n})();')),context)};
+ vm.runInNewContext(pdaAdapt(source.replace('// FF_TEST_EXPORT_POINT',expose)),context);
+ return {test:context.test,context,storage,intervals,calls,respond:fn=>responder=fn,reinject:()=>vm.runInNewContext(pdaAdapt(source.replace('// FF_TEST_EXPORT_POINT',expose)),context)};
 }
 (async()=>{
  for(const view of [{},{innerWidth:900,innerHeight:1400,visualViewport:{width:320,height:500,offsetLeft:120,offsetTop:200}},{innerWidth:260,innerHeight:300}]){
@@ -40,6 +43,9 @@ function harness(storage=new Map(),view={}){
   assert(left>=v.offsetLeft&&left+42<=v.offsetLeft+v.width,'launcher off visible viewport');assert(top>=v.offsetTop&&top+64<=v.offsetTop+v.height);
   t.launch.remove();t.mount();assert(t.launch.isConnected,'launcher remount failed');
  }
+ const broken=harness(new Map(),{failMain:true});
+ assert(broken.context.document.getElementById('ffcontractor-entry').children[0].textContent.includes('startup failed'),'Main initialization error remained silent');
+ const entry=harness();assert(entry.context.document.getElementById('ffcontractor-entry'),'Independent in-page control missing');assert.equal(entry.calls.length,0,'Startup made network calls');
  const fresh=harness(new Map([['ffcontractor-tab-position-v2',JSON.stringify({side:'right',fraction:0.92})]]));
  assert.equal(fresh.context.__FFContractor.diagnostic().launcherMode,'classic','Old dock coordinates replaced working default');
  assert(fresh.test.launch.style.cssText.includes('bottom:calc(104px')&&fresh.test.launch.style.cssText.includes('width:62px'),'Known v0.7 launcher CSS not restored');

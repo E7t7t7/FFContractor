@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.9.3
+// @version      0.9.4
 // @description  FFScouter loss contracts in a lightweight TornPDA chat panel, with payouts and GitHub updates.
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -16,14 +16,52 @@
 // @grant        none
 // ==/UserScript==
 
+// Independent in-page entry point. No credentials or network during startup.
+(function(){
+ 'use strict';
+ var version='0.9.4',old=window.__FFContractorBoot;
+ if(old&&typeof old.dispose==='function')old.dispose();
+ var stopped=false,failure='',stage='script entered',bar=document.createElement('div'),button=document.createElement('button'),info=document.createElement('button');
+ bar.id='ffcontractor-entry';bar.setAttribute('data-ff-version',version);
+ bar.style.cssText='all:initial!important;display:block!important;position:relative!important;clear:both!important;box-sizing:border-box!important;width:100%!important;min-height:38px!important;padding:5px 8px!important;background:#15374a!important;color:#fff!important;font:13px -apple-system,system-ui,sans-serif!important;z-index:2147483647!important;visibility:visible!important;opacity:1!important;';
+ button.type=info.type='button';
+ button.style.cssText=info.style.cssText='all:initial!important;display:inline-block!important;box-sizing:border-box!important;min-height:30px!important;padding:6px 10px!important;margin:0 5px 0 0!important;border:1px solid #73c3e4!important;border-radius:5px!important;background:#125a7b!important;color:white!important;font:bold 13px -apple-system,system-ui,sans-serif!important;cursor:pointer!important;';
+ info.textContent='Startup info';
+ bar.appendChild(button);bar.appendChild(info);
+ function label(){button.textContent=failure?'FF v'+version+' startup failed':window.__FFContractor&&window.__FFContractor.version===version&&window.__FFContractor.ready?'Open FFContractor v'+version:'FF v'+version+' starting...';}
+ function mount(){
+  if(stopped)return;
+  var parent=document.body||document.documentElement;
+  if(parent&&bar.parentNode!==parent)parent.insertBefore(bar,parent.firstChild);
+  label();
+ }
+ button.onclick=function(){
+  var app=window.__FFContractor;
+  if(app&&app.version===version&&app.ready&&typeof app.show==='function'){try{app.show();}catch(e){fail(e,'open panel');}}
+  else info.onclick();
+ };
+ info.onclick=function(){
+  var diagnostic={version:version,stage:stage,error:failure||null,launcher:!!document.getElementById('ffcontractor-launcher'),entryAttached:!!bar.isConnected,ready:!!(window.__FFContractor&&window.__FFContractor.version===version&&window.__FFContractor.ready),viewport:{width:window.innerWidth,height:window.innerHeight},bridge:typeof PDA_httpGet==='function'?'TornPDA':typeof GM_xmlhttpRequest==='function'?'Commander':'unavailable'};
+  window.prompt('FFContractor startup information (no keys or account data)',JSON.stringify(diagnostic));
+ };
+ function fail(e,at){stage=at||stage;failure=String(e&&e.name||'Error')+' during '+stage;mount();}
+ window.__FFContractorBoot={stage:function(value){stage=value;label();},fail:fail,mount:mount,dispose:function(){stopped=true;clearInterval(timer);bar.remove();}};
+ mount();
+ var timer=setInterval(mount,1500);
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});
+ window.addEventListener('pageshow',mount);
+})();
+
+try {
 (function () {
   'use strict';
   // Keep v0.7's proven plain-DOM launcher bootstrap and reinjection pattern.
   // Position recoverability is handled independently of FFScouter API startup.
-  const VERSION = '0.9.3';
+  const VERSION = '0.9.4';
   const ROOT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const API = 'https://ffscouter.com/api/v1/losses/seller';
   const ID = 'ffcontractor-launcher';
+  if(window.__FFContractorBoot)window.__FFContractorBoot.stage('launcher setup');
   const old = document.getElementById(ID);
   const previous=window.__FFContractor;
   if(old&&old.getAttribute('data-ff-version')===VERSION&&previous&&previous.ready&&typeof old.onclick==='function'){previous.mount();return;}
@@ -189,6 +227,7 @@
     // runs early before the dashboard's let bindings exist.
   }
   mount();
+  if(window.__FFContractorBoot)window.__FFContractorBoot.stage('launcher mounted');
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, {once:true});
   window.addEventListener('pageshow', mount);
   window.addEventListener('resize', mount);
@@ -604,8 +643,11 @@
     diagnostic(){return {version:VERSION,launcherMode,launcherAttached:!!launch.isConnected,panelOpen:opened,bridge:typeof PDA_httpGet==='function'?'TornPDA':typeof GM_xmlhttpRequest==='function'?'Commander':'unavailable',viewport:viewport()};},
     dispose(){disposed=true;timers.forEach(clearInterval);if(mountObserver)mountObserver.disconnect();launch.remove();if(panel)panel.remove();}
   };
+  if(window.__FFContractorBoot)window.__FFContractorBoot.stage('ready');
   if(typeof GM_registerMenuCommand==='function'){
     GM_registerMenuCommand('Open FFContractor',()=>window.__FFContractor.show());
     GM_registerMenuCommand('Restore classic FF launcher',()=>window.__FFContractor.reset());
   }
+// FF_TEST_EXPORT_POINT
 })();
+} catch(error) { if(window.__FFContractorBoot)window.__FFContractorBoot.fail(error); }

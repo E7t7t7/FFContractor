@@ -1,3 +1,13 @@
+## v0.9.4 — independent in-page entry and startup status
+The confirmed quote-normalization parse error was fixed in v0.9.3, but the user's iPhone still shows no floating launcher. The remaining device failure is not established; no claim is made that the desktop test reproduces it.
+
+- Adds an independent **Open FFContractor v0.9.4** bar inside the normal Torn page, separate from floating/side positioning.
+- Adds Startup info containing only version, initialization stage, error type, attachment status, viewport size and bridge availability. No credentials or player data are included.
+- Catches errors during main initialization so the in-page bar can report a failure rather than disappear silently.
+- Preserves the current launcher, key/history storage, contracts and raw update URL.
+- Tested through TornPDA preprocessing, existing offline API/lifecycle fixtures and a real headless Edge mobile-sized DOM. Real iPhone visibility remains unverified.
+- After updating, reopen Torn and look at the top of the page for Open FFContractor v0.9.4. If that control is also absent, the main floating-position logic cannot explain the whole failure; the installed version and TornPDA runtime details are needed.
+
 ## v0.9.3 — reproduced TornPDA startup parse failure
 **Actual failure reproduced:** TornPDA's UserscriptsProvider.adaptSource globally changes curly apostrophes to ASCII apostrophes before evaluating userscripts. FFContractor's attack-card HTML included the literal text Torn’s inside a single-quoted JavaScript string. The app rewrote it to Torn's, terminating that string early and raising SyntaxError before any launcher code ran. Raw JavaScript tests did not reproduce the app's preprocessing.
 
@@ -84,7 +94,7 @@ The position is saved separately from API credentials and the payout ledger, usi
 
 A personal-use FFScouter loss-contract dashboard that runs inside the TornPDA browser, with contracts, claiming, payout reconciliation, and a GitHub update check.
 
-## Current release: v0.9.3
+## Current release: v0.9.4
 
 The installer URL remains the same:
 
