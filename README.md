@@ -1,3 +1,15 @@
+## v0.9.3 — reproduced TornPDA startup parse failure
+**Actual failure reproduced:** TornPDA's UserscriptsProvider.adaptSource globally changes curly apostrophes to ASCII apostrophes before evaluating userscripts. FFContractor's attack-card HTML included the literal text Torn’s inside a single-quoted JavaScript string. The app rewrote it to Torn's, terminating that string early and raising SyntaxError before any launcher code ran. Raw JavaScript tests did not reproduce the app's preprocessing.
+
+- Historical reproduction: v0.7.0 and v0.8.0 parse after PDA rewriting; v0.8.1, v0.8.2 and v0.9.2 fail with the same syntax error. This identifies v0.8.1 as the first broken release in that comparison.
+- Reworded that label without the problematic apostrophe.
+- Tests now compile and execute the full production script through TornPDA's wrapper and quote-rewriting transformation.
+- Added a broken-string regression fixture that proves the original error, then verifies the repaired script mounts and passes existing launcher/contract tests.
+- No further speculative launcher-position changes. Existing Classic/Side preferences, credentials, payout history, contract safeguards and update URLs are retained.
+- Compared the locally installed Loss X-change startup and the public TornPDA loader; no Loss X-change source is redistributed.
+- Reference: https://github.com/Manuito83/torn-pda/blob/master/lib/providers/userscripts_provider.dart
+- Update the existing script to v0.9.3 in TornPDA and reopen Torn. The preprocessing failure is confirmed offline; the final iPhone display still needs user confirmation.
+
 ## v0.9.2 — restore the confirmed working launcher layout
 Reviewed the original **Create Loss Contract Script** conversation and repository history. Injection had already been established; the launcher was visible before later updates. The precise iPhone rendering failure is still not captured.
 
@@ -72,7 +84,7 @@ The position is saved separately from API credentials and the payout ledger, usi
 
 A personal-use FFScouter loss-contract dashboard that runs inside the TornPDA browser, with contracts, claiming, payout reconciliation, and a GitHub update check.
 
-## Current release: v0.9.2
+## Current release: v0.9.3
 
 The installer URL remains the same:
 

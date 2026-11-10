@@ -1,7 +1,11 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const source=fs.readFileSync('FFContractor.user.js','utf8');
-assert(source.includes('@version      0.9.2')&&source.includes("const VERSION = '0.9.2'"));
+assert(source.includes('@version      0.9.3')&&source.includes("const VERSION = '0.9.3'"));
 for(const tag of ['@updateURL','@downloadURL'])assert(new RegExp(tag+'\\s+https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js').test(source));
+// Reproduce TornPDA UserscriptsProvider.adaptSource, including its global smart-quote rewrite.
+function pdaAdapt(text){return ('(function(){const PDA_storage=window.__pdaStorageFactory&&window.__pdaStorageFactory("fixture-only");'+text+'}());').replace(/[“”]/g,'"').replace(/[‘’]/g,"'");}
+assert.throws(()=>new vm.Script(pdaAdapt("var label='Opens Torn"+String.fromCharCode(8217)+"s attack page';")),SyntaxError,'Regression fixture no longer models PDA quote rewriting');
+new vm.Script(source);new vm.Script(pdaAdapt(source));
 function harness(storage=new Map(),view={}){
  class Node{
   constructor(tag){this.tagName=tag;this.children=[];this.attrs={};this.events={};this.style={setProperty:(k,v)=>this.style[k]=v};}
@@ -26,8 +30,8 @@ function harness(storage=new Map(),view={}){
  'window.test={launch,mount,placeLauncher,setDock,targetIdFrom,tornIdFromUrl,claimWithTarget,attackLink,mergeLedger,paid,summarize,claim,complete,refresh,sendHttp,recordReceipt,pending,',
  "setup(x={}){apiKey=x.key||'0123456789ABCDEF';activateLedger();contracts=x.contracts||[];claims=x.claims||[];cap=x.cap??10;lastSync=Date.now();claimsCheckedAt=x.stale?Date.now()-60000:Date.now();busy=false;render=()=>{};panel={querySelectorAll:()=>[{getAttribute:()=>x.order||'ORDER-A',value:x.count||2}]};},",
  'state:()=>({claims,currentLedger,errorText,busy,pending:pending()}),loadPending:async()=>{pendingAll=await nativeGet(PENDING_STORAGE,{})}};'].join('\n');
- vm.runInNewContext(source.replace(/\}\)\(\);\s*$/,expose+'\n})();'),context);
- return {test:context.test,context,storage,intervals,calls,respond:fn=>responder=fn,reinject:()=>vm.runInNewContext(source.replace(/\}\)\(\);\s*$/,expose+'\n})();'),context)};
+ vm.runInNewContext(pdaAdapt(source.replace(/\}\)\(\);\s*$/,expose+'\n})();')),context);
+ return {test:context.test,context,storage,intervals,calls,respond:fn=>responder=fn,reinject:()=>vm.runInNewContext(pdaAdapt(source.replace(/\}\)\(\);\s*$/,expose+'\n})();')),context)};
 }
 (async()=>{
  for(const view of [{},{innerWidth:900,innerHeight:1400,visualViewport:{width:320,height:500,offsetLeft:120,offsetTop:200}},{innerWidth:260,innerHeight:300}]){
@@ -85,5 +89,5 @@ function harness(storage=new Map(),view={}){
  restart.context.GM_xmlhttpRequest=r=>{gm=true;r.onload({status:200,responseText:'{}'})};
  await restart.test.sendHttp('GET','https://ffscouter.com/api/v1/check-key',{});assert(gm,'Commander HTTP fallback missing');
  assert(!source.includes('?.')&&!source.includes('Promise.allSettled'),'Older WebKit unsupported dependency returned');
- console.log('FFCONTRACTOR PASSED: viewport/remount/drag persistence, target retention, 8 statistics, payment evidence, bounded Claim Max, active/stale guards, interrupted restart and desktop transport. Simulated only.');
+ console.log('FFCONTRACTOR PASSED (TornPDA-adapted source): viewport/remount/drag persistence, target retention, 8 statistics, payment evidence, bounded Claim Max, active/stale guards, interrupted restart and desktop transport. Simulated only.');
 })().catch(e=>{console.error(e);process.exitCode=1});
