@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.9.6
+// @version      0.9.7
 // @description  FFScouter loss contracts in a lightweight TornPDA chat panel, with payouts and GitHub updates.
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -119,7 +119,7 @@
 // Independent in-page entry point. No credentials or network during startup.
 (function () {
     'use strict';
-    var version = '0.9.6', old = window.__FFContractorBoot;
+    var version = '0.9.7', old = window.__FFContractorBoot;
     if (old && typeof old.dispose === 'function')
         old.dispose();
     var stopped = false, failure = '', stage = 'script entered', bar = document.createElement('div'), button = document.createElement('button'), info = document.createElement('button');
@@ -171,7 +171,7 @@ try {
         var _a;
         // Keep v0.7's proven plain-DOM launcher bootstrap and reinjection pattern.
         // Position recoverability is handled independently of FFScouter API startup.
-        const VERSION = '0.9.6';
+        const VERSION = '0.9.7';
         const ROOT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
         const API = 'https://ffscouter.com/api/v1/losses/seller';
         const ID = 'ffcontractor-launcher';
@@ -748,16 +748,17 @@ try {
             scroll.scrollTop = oldScroll;
         }
         function activeMarkup(c) {
+            var _a;
             const id = targetIdFrom(claimWithTarget(c));
             const action = id
-                ? '<a class="ff-target-link" data-action="attack" href="' + attackLink(id) + '">⚔ Attack now</a>'
+                ? '<a class="ff-target-link" data-action="attack" href="' + attackLink(id) + '">Open target only</a>'
                 : '<button type="button" data-action="locate-target" data-order="' + esc(c.order_number || '') + '" data-claim-id="' + esc(c.id || '') + '">Find target</button>';
             return '<div class="ff-card"><strong>Active: ' + esc(c.order_number || c.id) + '</strong>' +
                 '<div class="ff-small">' + (Number(c.slots_delivered) || 0) + '/' + (Number(c.slots_claimed) || 0) +
                 ' verified · ' + money(c.earnings || 0) + ' earned' + (id ? ' · Target [' + id + ']' : '') + '</div>' +
-                '<div class="ff-row">' + action + '<button data-action="complete" data-id="' + Number(c.id) + '">Mark complete</button></div>' +
+                '<div class="ff-row">' + action + (id && !((_a = window.chrome) === null || _a === void 0 ? void 0 : _a.webview) ? '<button type="button" class="ff-primary" data-action="mobile-open">Run losses on this phone…</button>' : '') + '<button data-action="complete" data-id="' + Number(c.id) + '">Mark complete</button></div>' +
                 (!id ? '<div class="ff-small">Target ID was not included with the refreshed claim. Tap Find target to check the order details. If unavailable, <a href="https://ffscouter.com/sell-losses">open your official FFScouter claims</a>.</div>' :
-                    '<div class="ff-small">Opens the Torn attack page in this browser. Perform your losses manually.</div>') + '</div>';
+                    '<div class="ff-small">Open target only is manual. To run the automatic session, choose Run losses on this phone.</div>') + '</div>';
         }
         function setOpen(value) {
             opened = !!value;
@@ -940,7 +941,7 @@ try {
                     item.target_player_id = id;
                     mergeLedger([item]);
                 }
-                notice = 'Target [' + id + '] found. Tap Attack now.';
+                notice = 'Target [' + id + '] found. Choose Run losses on this phone, or Open target only for manual play.';
                 errorText = '';
                 render();
             }
@@ -1061,6 +1062,11 @@ try {
                 return;
             }
             const action = b.getAttribute('data-action');
+            if (action === 'mobile-open') {
+                tab = 'Mobile Session';
+                render();
+                return;
+            }
             if (action === null || action === void 0 ? void 0 : action.startsWith('mobile-')) {
                 void mobileAction(action, b.getAttribute('data-id'));
                 return;

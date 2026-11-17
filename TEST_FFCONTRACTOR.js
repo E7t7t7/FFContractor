@@ -1,6 +1,6 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const source=fs.readFileSync('FFContractor.user.js','utf8');
-assert(source.includes('@version      0.9.6')&&source.includes("const VERSION = '0.9.6'"));
+assert(source.includes('@version      0.9.7')&&source.includes("const VERSION = '0.9.7'"));
 for(const tag of ['@updateURL','@downloadURL'])assert(new RegExp(tag+'\\s+https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js').test(source));
 // Reproduce TornPDA UserscriptsProvider.adaptSource, including its global smart-quote rewrite.
 function pdaAdapt(text){return ('(function(){const PDA_storage=window.__pdaStorageFactory&&window.__pdaStorageFactory("fixture-only");'+text+'}());').replace(/[“”]/g,'"').replace(/[‘’]/g,"'");}

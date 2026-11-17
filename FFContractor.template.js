@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.9.6
+// @version      0.9.7
 // @description  FFScouter loss contracts in a lightweight TornPDA chat panel, with payouts and GitHub updates.
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -19,7 +19,7 @@
 // Independent in-page entry point. No credentials or network during startup.
 (function(){
  'use strict';
- var version='0.9.6',old=window.__FFContractorBoot;
+ var version='0.9.7',old=window.__FFContractorBoot;
  if(old&&typeof old.dispose==='function')old.dispose();
  var stopped=false,failure='',stage='script entered',bar=document.createElement('div'),button=document.createElement('button'),info=document.createElement('button');
  bar.id='ffcontractor-entry';bar.setAttribute('data-ff-version',version);
@@ -57,7 +57,7 @@ try {
   'use strict';
   // Keep v0.7's proven plain-DOM launcher bootstrap and reinjection pattern.
   // Position recoverability is handled independently of FFScouter API startup.
-  const VERSION = '0.9.6';
+  const VERSION = '0.9.7';
   const ROOT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const API = 'https://ffscouter.com/api/v1/losses/seller';
   const ID = 'ffcontractor-launcher';
@@ -469,14 +469,14 @@ try {
   function activeMarkup(c) {
     const id=targetIdFrom(claimWithTarget(c));
     const action=id
-      ? '<a class="ff-target-link" data-action="attack" href="'+attackLink(id)+'">⚔ Attack now</a>'
+      ? '<a class="ff-target-link" data-action="attack" href="'+attackLink(id)+'">Open target only</a>'
       : '<button type="button" data-action="locate-target" data-order="'+esc(c.order_number||'')+'" data-claim-id="'+esc(c.id||'')+'">Find target</button>';
     return '<div class="ff-card"><strong>Active: '+esc(c.order_number||c.id)+'</strong>'+
       '<div class="ff-small">'+(Number(c.slots_delivered)||0)+'/'+(Number(c.slots_claimed)||0)+
       ' verified · '+money(c.earnings||0)+' earned'+(id?' · Target ['+id+']':'')+'</div>'+
-      '<div class="ff-row">'+action+'<button data-action="complete" data-id="'+Number(c.id)+'">Mark complete</button></div>'+
+      '<div class="ff-row">'+action+(id&&!window.chrome?.webview?'<button type="button" class="ff-primary" data-action="mobile-open">Run losses on this phone…</button>':'')+'<button data-action="complete" data-id="'+Number(c.id)+'">Mark complete</button></div>'+
       (!id?'<div class="ff-small">Target ID was not included with the refreshed claim. Tap Find target to check the order details. If unavailable, <a href="https://ffscouter.com/sell-losses">open your official FFScouter claims</a>.</div>':
-      '<div class="ff-small">Opens the Torn attack page in this browser. Perform your losses manually.</div>')+'</div>';
+      '<div class="ff-small">Open target only is manual. To run the automatic session, choose Run losses on this phone.</div>')+'</div>';
   }
   function setOpen(value) {
     opened=!!value;buildPanel();
@@ -551,7 +551,7 @@ try {
       if(!id) throw Error('FFScouter returned no usable target ID. Use its Target link for this contract.');
       const item=claims.find(c=>String(c.id)===String(claimId));
       if(item){item.target_player_id=id;mergeLedger([item]);}
-      notice='Target ['+id+'] found. Tap Attack now.';errorText='';render();
+      notice='Target ['+id+'] found. Choose Run losses on this phone, or Open target only for manual play.';errorText='';render();
     }catch(e){errorText=String(e.message||e);notice='';render();}
   }
   async function complete(id){
@@ -594,6 +594,7 @@ try {
     const b=e.target.closest('[data-action], [data-tab]');if(!b)return;
     if(b.hasAttribute('data-tab')){tab=b.getAttribute('data-tab');render();return;}
     const action=b.getAttribute('data-action');
+    if(action==='mobile-open'){tab='Mobile Session';render();return;}
     if(action?.startsWith('mobile-')){void mobileAction(action,b.getAttribute('data-id'));return;}
     if(action==='close')setOpen(false);
     if(action==='refresh')void refresh();

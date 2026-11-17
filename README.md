@@ -1,3 +1,6 @@
+## v0.9.7 — explicit mobile-loop entry
+The active claim now has **Run losses on this phone…**, which opens Mobile Session setup. The old Attack now link is labeled **Open target only** because it performs manual navigation, not a loop start. The confirmed navigation fix and diagnostic improvements from v0.9.6 are included. After updating, reopen Torn, select the active claim's Run losses button, review permissions and press Start mobile loss loop.
+
 ## v0.9.6 — fix mobile navigation stopping the session
 - Reproduced v0.9.5 stopping during an ordinary Items → target page navigation: the outgoing document became hidden and the foreground handler persisted a Pause.
 - Planned navigation now carries a short-lived, exact account/claim/target/session handoff. It survives normal document replacement and back/forward-cache storage; switching away from the app or following another route still pauses.

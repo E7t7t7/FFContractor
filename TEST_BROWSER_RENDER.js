@@ -2,7 +2,7 @@
 const fs=require('fs'),assert=require('assert');
 const {chromium}=require(process.env.FF_PLAYWRIGHT_MODULE||'playwright');
 const source=fs.readFileSync('FFContractor.user.js','utf8');
-const testSource=source.replace('// FF_TEST_EXPORT_POINT',"window.__mobileFixture=function(){apiKey='0123456789ABCDEF';claims=[{id:9,state:'active',target_player_id:2,slots_claimed:2,slots_delivered:0,expires_at:Math.floor(Date.now()/1000)+300}];tab='Mobile Session';render();};");
+const testSource=source.replace('// FF_TEST_EXPORT_POINT',"window.__mobileFixture=function(){apiKey='0123456789ABCDEF';claims=[{id:9,state:'active',target_player_id:2,slots_claimed:2,slots_delivered:0,expires_at:Math.floor(Date.now()/1000)+300}];tab='Overview';render();};");
 const adapted=testSource.replace(/[“”]/g,'"').replace(/[‘’]/g,"'");
 (async()=>{
  const browser=await chromium.launch({headless:true,...(process.env.FF_BROWSER_EXECUTABLE?{executablePath:process.env.FF_BROWSER_EXECUTABLE}:{})});
@@ -14,12 +14,14 @@ const adapted=testSource.replace(/[“”]/g,'"').replace(/[‘’]/g,"'");
   await page.evaluate(adapted);
   assert(await page.locator('#ffcontractor-entry').isVisible(),'Inline entry not visible');
   const rect=await page.locator('#ffcontractor-entry').boundingBox();assert(rect.y>=0&&rect.y<100&&rect.width<=390,'Inline entry outside viewport');
-  assert((await page.locator('#ffcontractor-entry').innerText()).includes('0.9.6'));
+  assert((await page.locator('#ffcontractor-entry').innerText()).includes('0.9.7'));
   await page.locator('#ffcontractor-entry button').first().click();
   assert(await page.locator('#ffcontractor-panel').isVisible(),'Inline entry cannot open real panel');
   assert((await page.locator('#ffcontractor-panel').innerText()).includes('Add your FFScouter API key'));
   assert.equal(network,before,'Startup/open made external requests without credentials');
   await page.evaluate(()=>window.__mobileFixture());
+  assert(await page.getByRole('link',{name:'Open target only',exact:true}).isVisible(),'Manual target link unclear');
+  await page.getByRole('button',{name:'Run losses on this phone…',exact:true}).click();
   assert(await page.getByRole('button',{name:'Start mobile loss loop',exact:true}).isVisible());
   await page.locator('#ff-mobile-torn-key').fill('0123456789ABCDEF');
   await page.getByRole('button',{name:'Start mobile loss loop',exact:true}).click();

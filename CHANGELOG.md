@@ -1,3 +1,9 @@
+# v0.9.7 — 2026-11-17
+- Add Run losses on this phone to active phone claims, leading directly to Mobile Session.
+- Rename the old manual Attack now link to Open target only, with explicit instructions distinguishing it from a loop start.
+- Include the v0.9.6 document-navigation fix and credential-free diagnostic control.
+- Validate startup/metadata, core/host/worker regressions and real mobile-sized browser navigation. Live iPhone behavior remains unverified.
+
 # v0.9.6 — 2026-11-17
 - Fix a reproduced false foreground pause while the mobile worker navigates from Items to its attack target or back to Medical.
 - Bind expected document handoffs to the account, claim, target, window token, trusted Torn URL and 30-second navigation window. Expected BFCache storage is supported; unrelated routes and real app backgrounding still pause.
