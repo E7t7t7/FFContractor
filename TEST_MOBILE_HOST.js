@@ -1,12 +1,13 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert'),core=require('./MobileLossCore.js').FFMobileCore;
-const packets=[],store=new Map();let pauses=0,hospitalProbes=0;
+const packets=[],store=new Map(),events={};let pauses=0,hospitalProbes=0;
 const state={running:true,targetId:'2'},worker={getState:()=>state,pause:()=>{pauses++;state.running=false;},recoverFromHospital:()=>hospitalProbes++,onClaim:(...x)=>packets.push(['claim',...x]),onCommit:(...x)=>packets.push(['commit',...x]),onLossTerminal:x=>packets.push(['terminal',x]),onMedical:(...x)=>packets.push(['medical',...x])};
 let response={profile:{id:1,status:{state:'Okay'},life:{current:100,maximum:100}},bars:{energy:{current:100}},cooldowns:{medical:0},perks:{}},requests=0;
-const context={FFMobileCore:core,window:{FFMobileLossCycle:worker},document:{addEventListener(){}},apiKey:'fixture-seller',hash:()=> 'fixture-seller-hash',sessionStorage:{getItem:()=> '0123456789ABCDEF'},Date,Math,console,setTimeout:f=>f(),opened:false,tab:'Mobile Session',
+const context={FFMobileCore:core,window:{FFMobileLossCycle:worker},document:{addEventListener(){}},clearTimeout(){},apiKey:'fixture-seller',hash:()=> 'fixture-seller-hash',sessionStorage:{getItem:()=> '0123456789ABCDEF'},Date,Math,console,setTimeout:f=>f(),opened:false,tab:'Mobile Session',
 getStore:(k,d)=>store.get(k)||d,setStore:(k,v)=>store.set(k,structuredClone(v)),render(){},isKey:k=>k==='0123456789ABCDEF',
 sendHttp:async(method,url,headers)=>{requests++;assert(url.startsWith('https://api.torn.com/v2/'));assert.equal(headers.Authorization,'ApiKey 0123456789ABCDEF');return {status:200,responseText:JSON.stringify(response)};},mergeLedger(){},claimWithTarget:c=>c,request:async()=>{throw Error('Unexpected remote mutation');}};
+context.window.addEventListener=(name,fn)=>events[name]=fn;
 vm.createContext(context);
-vm.runInContext(fs.readFileSync('MobileLossHost.js','utf8')+'\nglobalThis.host={receive:mobileReceive,set(s){mobile=s;mobileLastApi=0;},get:()=>mobile,start:startMobile};',context);
+vm.runInContext(fs.readFileSync('MobileLossHost.js','utf8')+'\nglobalThis.host={receive:mobileReceive,set(s){mobile=s;mobileLastApi=0;},get:()=>mobile,start:startMobile,action:mobileAction};',context);
 function session(){return {seller:'fixture-seller-hash',owner:1,target:2,remoteId:9,total:2,baseline:0,local:[],checked:Date.now(),deadline:Date.now()+300000,claim:{id:9},heal:true,permissions:{68:true,67:true,66:true},medicalSession:'test-med'};}
 const msg=(type,extra={})=>({type,profileId:'1',orderId:'ff-mobile-9',...extra});
 (async()=>{
@@ -40,5 +41,10 @@ const msg=(type,extra={})=>({type,profileId:'1',orderId:'ff-mobile-9',...extra})
  let started;worker.reset=()=>{};worker.start=config=>{started=config;};
  await context.host.start(9);assert(started&&started.playerId===1&&started.targetId==='2'&&started.localLossTracking&&started.smartMedical);
  assert.equal(started.orderId,'ff-mobile-9');assert(context.host.get().heal&&context.host.get().permissions[67]);
+ context.host.set(session());Object.assign(state,{running:true,profileId:'1',orderId:'ff-mobile-9',targetId:'2',stage:'attack-open',navigationLastAt:Date.now(),navigationUrl:'https://www.torn.com/page.php?sid=attack&user2ID=2',sessionToken:'fixture-nav'});
+ events.pagehide({persisted:true});assert(state.running&&context.host.get().departure?.token==='fixture-nav','Expected BFCache navigation incorrectly paused');
+ context.host.set(session());state.running=true;state.navigationUrl='https://evil.example/';events.pagehide({persisted:false});assert(!state.running,'Unexpected departure did not pause');
+ let diagnostic='';context.VERSION='0.9.6';context.location={pathname:'/page.php'};context.navigator={clipboard:{writeText:async value=>diagnostic=value}};worker.diagnostics=()=>({stage:'fight',medicalOwner:1});
+ await context.host.action('mobile-diagnostic');assert.equal(JSON.parse(diagnostic).worker.stage,'fight');assert(!diagnostic.includes('0123456789ABCDEF')&&!diagnostic.includes('fixture-seller'),'Diagnostic exposed a key');
  console.log('MOBILE HOST PASSED: native claim grants, local receipt replay/quota, medical plan-authorize-verify, quantity/cooldown verification, no repeated medicine, account isolation, hospital race and drug rejection. Mocked only.');
 })().catch(e=>{console.error(e);process.exitCode=1});

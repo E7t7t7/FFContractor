@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.9.5
+// @version      0.9.6
 // @description  FFScouter loss contracts in a lightweight TornPDA chat panel, with payouts and GitHub updates.
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -84,12 +84,42 @@
             throw Error('The claim expired. No new attack authorized.');
         return deadline;
     }
-    root.FFMobileCore = { meds, plan, modifiers, verify, receipt, validateSession };
+    function plannedNavigation(state, session, now) {
+        if (!(state === null || state === void 0 ? void 0 : state.running) || !session || state.profileId !== String(session.owner) || state.orderId !== 'ff-mobile-' + session.remoteId || Number(state.targetId) !== session.target || !['attack-open', 'heal-open', 'recovery-probe', 'final-recovery'].includes(state.stage))
+            return null;
+        const age = now - Number(state.navigationLastAt);
+        if (!Number.isFinite(age) || age < 0 || age > 30000)
+            return null;
+        try {
+            const url = new URL(state.navigationUrl);
+            if (url.protocol !== 'https:' || url.hostname !== 'www.torn.com' || url.port || url.username || url.password)
+                return null;
+            if (url.pathname === '/item.php' && state.stage === 'heal-open')
+                return url.href;
+            if (url.pathname === '/page.php' && url.searchParams.get('sid') === 'attack' && Number(url.searchParams.get('user2ID')) === session.target && state.stage !== 'heal-open')
+                return url.href;
+        }
+        catch { }
+        return null;
+    }
+    function navigationArrival(state, session, actual, now) {
+        const departure = session === null || session === void 0 ? void 0 : session.departure, expected = plannedNavigation(state, session, now);
+        if (!departure || !expected || departure.to !== expected || departure.owner !== session.owner || departure.remoteId !== session.remoteId || departure.token !== state.sessionToken || now - departure.at < 0 || now - departure.at > 30000)
+            return false;
+        try {
+            const a = new URL(actual), b = new URL(expected);
+            return a.origin === b.origin && a.pathname === b.pathname && (b.pathname === '/item.php' || a.searchParams.get('sid') === 'attack' && Number(a.searchParams.get('user2ID')) === session.target);
+        }
+        catch {
+            return false;
+        }
+    }
+    root.FFMobileCore = { meds, plan, modifiers, verify, receipt, validateSession, plannedNavigation, navigationArrival };
 })(typeof module === 'object' ? module.exports : globalThis);
 // Independent in-page entry point. No credentials or network during startup.
 (function () {
     'use strict';
-    var version = '0.9.5', old = window.__FFContractorBoot;
+    var version = '0.9.6', old = window.__FFContractorBoot;
     if (old && typeof old.dispose === 'function')
         old.dispose();
     var stopped = false, failure = '', stage = 'script entered', bar = document.createElement('div'), button = document.createElement('button'), info = document.createElement('button');
@@ -138,9 +168,10 @@
 try {
     (function () {
         'use strict';
+        var _a;
         // Keep v0.7's proven plain-DOM launcher bootstrap and reinjection pattern.
         // Position recoverability is handled independently of FFScouter API startup.
-        const VERSION = '0.9.5';
+        const VERSION = '0.9.6';
         const ROOT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
         const API = 'https://ffscouter.com/api/v1/losses/seller';
         const ID = 'ffcontractor-launcher';
@@ -828,6 +859,7 @@ try {
                 ownerPlayer = positiveTornId(identity.player_id);
             }
             catch (_) { }
+            restoreMobile();
             tab = 'Overview';
             await refresh();
         }
@@ -1132,15 +1164,17 @@ try {
                     apiKey = saved;
             }
             // Seller credentials are entered explicitly; never silently forward TornPDA's Torn key.
+            if (isKey(apiKey))
+                setSession(apiKey);
             activateLedger();
             restoreMobile();
             render();
             if (isKey(apiKey) && opened)
                 void refresh();
         }
-        if (getStore('ff-mobile-loss-host-v1', null) && getSession()) {
+        if (getStore('ff-mobile-loss-host-v1', null)) {
             loadState.done = true;
-            void loadState().catch(() => { });
+            void loadState().catch(mobileRestoreFailed);
         }
         launch.onclick = function () {
             if (Date.now() < suppressClickUntil)
@@ -1198,7 +1232,7 @@ try {
         } }
         function mobileWorker() { return window.FFMobileLossCycle; }
         function mobileCount() { return mobile ? Math.max(mobile.baseline + mobile.local.length, Number(mobile.providerDelivered) || 0) : 0; }
-        function mobilePause(reason) { var _a; mobileStatus = String(reason); (_a = mobileWorker()) === null || _a === void 0 ? void 0 : _a.pause(); if (mobile) {
+        function mobilePause(reason) { var _a; (_a = mobileWorker()) === null || _a === void 0 ? void 0 : _a.pause(String(reason)); mobileStatus = String(reason); if (mobile) {
             mobile.note = mobileStatus;
             mobileSave();
         } if (opened)
@@ -2994,11 +3028,11 @@ try {
                         save(state);
                         return true;
                     },
-                    pause() {
+                    pause(reason) {
                         const state = load();
                         if (!state)
                             return false;
-                        pauseState(state, 'Paused from Torn Commander.', false);
+                        pauseState(state, reason || 'Paused from FFContractor Mobile.', false);
                         return true;
                     },
                     resume() {
@@ -3424,14 +3458,26 @@ try {
             var _a;
             const active = claims.find(c => c.state === 'active'), state = (_a = mobileWorker()) === null || _a === void 0 ? void 0 : _a.getState(), owned = mobile && mobile.seller === hash(apiKey);
             return '<h3>Phone-native loss session</h3><p class="ff-small">Runs on this phone, not your home PC. Keep TornPDA foreground and unlocked. Do not run this claim on another device. Automatic attacks/healing are contrary to Torn scripting rules.</p>' +
-                '<div class="ff-card"><strong>' + esc(owned ? mobileStatus : 'Not started') + '</strong><div class="ff-small">' + (owned ? mobileCount() + '/' + mobile.total + ' tracked losses · ' + Math.max(0, mobileCount() - mobile.baseline) + ' locally recorded this session · ' + Number(mobile.itemsUsed || 0) + ' medical items · ' + Math.round(Number(mobile.cooldownUsed || 0) / 60) + ' minutes added medical cooldown' : 'No mobile session for this seller account.') + '</div><div class="ff-row"><button data-action="mobile-pause">Pause</button><button data-action="mobile-resume">Resume</button><button data-action="mobile-stop">Stop</button></div></div>' +
+                '<div class="ff-card"><strong>' + esc(owned ? mobileStatus : 'Not started') + '</strong><div class="ff-small">' + (owned ? mobileCount() + '/' + mobile.total + ' tracked losses · ' + Math.max(0, mobileCount() - mobile.baseline) + ' locally recorded this session · ' + Number(mobile.itemsUsed || 0) + ' medical items · ' + Math.round(Number(mobile.cooldownUsed || 0) / 60) + ' minutes added medical cooldown' : 'No mobile session for this seller account.') + '</div><div class="ff-row"><button data-action="mobile-pause">Pause</button><button data-action="mobile-resume">Resume</button><button data-action="mobile-stop">Stop</button><button data-action="mobile-diagnostic">Copy diagnostic</button></div></div>' +
                 '<div class="ff-card"><label><input id="ff-mobile-home-off" type="checkbox"> I stopped home-PC execution for this claim</label><label>Separate Torn API key (this browser session only)<input id="ff-mobile-torn-key" type="password" autocomplete="off" placeholder="Identity, bars, cooldowns and perks access required"></label><label><input id="ff-mobile-heal" type="checkbox"> I permit automatic personal medical consumption</label><div class="ff-small">Drug use is permanently disabled. No blood bags or faction supplies.</div>' + FFMobileCore.meds.map(x => '<label><input id="ff-mobile-item-' + x.id + '" type="checkbox" checked> ' + esc(x.name) + '</label>').join('') + (active ? '<button class="ff-primary" data-action="mobile-start" data-id="' + Number(active.id) + '">Start mobile loss loop</button>' : '<p>No active claim. Refresh Contracts or reserve one first.</p>') + '</div>';
         }
         async function mobileAction(action, id) {
-            var _a, _b;
+            var _a, _b, _c, _d;
             try {
                 if (action === 'mobile-start') {
                     await startMobile(id);
+                    return;
+                }
+                if (action === 'mobile-diagnostic') {
+                    const value = JSON.stringify({ version: VERSION, status: mobileStatus, note: (mobile === null || mobile === void 0 ? void 0 : mobile.note) || '', hasSellerKey: isKey(apiKey), hasTornKey: isKey(mobileKey()), foreground: !document.hidden, path: location.pathname, worker: ((_b = (_a = mobileWorker()) === null || _a === void 0 ? void 0 : _a.diagnostics) === null || _b === void 0 ? void 0 : _b.call(_a)) || null });
+                    try {
+                        await navigator.clipboard.writeText(value);
+                        notice = 'Mobile diagnostic copied.';
+                    }
+                    catch {
+                        window.prompt('Copy mobile diagnostic (no API keys)', value);
+                    }
+                    render();
                     return;
                 }
                 if (!mobile || mobile.seller !== hash(apiKey))
@@ -3445,7 +3491,7 @@ try {
                     mobileSave();
                 }
                 if (action === 'mobile-resume') {
-                    const entered = String(((_a = panel.querySelector('#ff-mobile-torn-key')) === null || _a === void 0 ? void 0 : _a.value) || '').trim();
+                    const entered = String(((_c = panel.querySelector('#ff-mobile-torn-key')) === null || _c === void 0 ? void 0 : _c.value) || '').trim();
                     if (entered) {
                         if (!isKey(entered))
                             throw Error('Invalid Torn key.');
@@ -3453,7 +3499,7 @@ try {
                     }
                     await mobileClaimCheck(true);
                     const self = await mobileApi('user/profile');
-                    if (((_b = self.profile) === null || _b === void 0 ? void 0 : _b.id) !== mobile.owner)
+                    if (((_d = self.profile) === null || _d === void 0 ? void 0 : _d.id) !== mobile.owner)
                         throw Error('Account changed.');
                     const state = mobileWorker().getState();
                     if ((state === null || state === void 0 ? void 0 : state.profileId) !== String(mobile.owner) || (state === null || state === void 0 ? void 0 : state.orderId) !== 'ff-mobile-' + mobile.remoteId || Number(state === null || state === void 0 ? void 0 : state.targetId) !== mobile.target)
@@ -3469,18 +3515,68 @@ try {
             }
         }
         function restoreMobile() {
-            var _a, _b;
+            var _a, _b, _c, _d;
             const saved = getStore(MOBILE_STORE, null);
-            if (!saved || saved.seller !== hash(apiKey))
+            if (!saved)
                 return;
+            if (saved.seller !== hash(apiKey)) {
+                mobileStatus = 'Saved mobile session needs its owning seller key. Reconnect it to restore the worker.';
+                errorText = mobileStatus;
+                return;
+            }
             mobile = saved;
-            const stale = Date.now() - Number(mobile.seenAt || 0) > 15000;
+            const prior = getStore('__ff_mobile_loss_cycle_v1', null), arrival = FFMobileCore.navigationArrival(prior, mobile, location.href, Date.now()), stale = Date.now() - Number(mobile.seenAt || 0) > 15000;
+            // Restore a window marker only for a recent, exact, session-bound navigation.
+            if (arrival && isKey(mobileKey()) && !sessionStorage.getItem('__ff_mobile_loss_cycle_session_v1'))
+                sessionStorage.setItem('__ff_mobile_loss_cycle_session_v1', prior.sessionToken);
             installMobileWorker();
-            if (stale && ((_b = (_a = mobileWorker()) === null || _a === void 0 ? void 0 : _a.getState()) === null || _b === void 0 ? void 0 : _b.running))
+            if (!isKey(mobileKey()) && ((_b = (_a = mobileWorker()) === null || _a === void 0 ? void 0 : _a.getState()) === null || _b === void 0 ? void 0 : _b.running))
+                mobilePause('Torn API key did not survive this page change. Enter it in Mobile Session and Resume. No game action was authorized.');
+            else if (stale && !arrival && ((_d = (_c = mobileWorker()) === null || _c === void 0 ? void 0 : _c.getState()) === null || _d === void 0 ? void 0 : _d.running))
                 mobilePause('Mobile session was interrupted. Review the page and Resume explicitly.');
+            if (arrival) {
+                mobile.departure = null;
+                mobile.seenAt = Date.now();
+                mobileSave();
+            }
         }
-        document.addEventListener('visibilitychange', () => { var _a, _b; if (document.hidden && ((_b = (_a = mobileWorker()) === null || _a === void 0 ? void 0 : _a.getState()) === null || _b === void 0 ? void 0 : _b.running))
-            mobilePause('Phone left the foreground. Return to TornPDA and Resume explicitly.'); });
+        function mobileRestoreFailed() {
+            mobileStatus = 'Mobile session could not restart after navigation. Open Mobile Session and copy its diagnostic.';
+            errorText = mobileStatus;
+            loadState.done = false;
+            render();
+        }
+        let mobileHideTimer = null, mobileWasHidden = !!document.hidden, mobileDeparting = false;
+        (_a = window.addEventListener) === null || _a === void 0 ? void 0 : _a.call(window, 'pagehide', event => {
+            var _a, _b;
+            if (!((_b = (_a = mobileWorker()) === null || _a === void 0 ? void 0 : _a.getState()) === null || _b === void 0 ? void 0 : _b.running))
+                return;
+            const state = mobileWorker().getState(), to = FFMobileCore.plannedNavigation(state, mobile, Date.now());
+            if (to) {
+                mobileDeparting = true;
+                clearTimeout(mobileHideTimer);
+                mobile.departure = { to, owner: mobile.owner, remoteId: mobile.remoteId, token: state.sessionToken, at: Date.now() };
+                mobileSave();
+                return;
+            }
+            mobilePause('Torn page was closed or left outside the planned route. Resume explicitly.');
+        });
+        document.addEventListener('visibilitychange', () => {
+            var _a, _b;
+            clearTimeout(mobileHideTimer);
+            if (document.hidden) {
+                mobileWasHidden = true;
+                // Navigation may emit hidden before pagehide; defer the decision until the
+                // outgoing document can distinguish its planned route from backgrounding.
+                mobileHideTimer = setTimeout(() => { var _a, _b; if (document.hidden && !mobileDeparting && ((_b = (_a = mobileWorker()) === null || _a === void 0 ? void 0 : _a.getState()) === null || _b === void 0 ? void 0 : _b.running))
+                    mobilePause('Phone left the foreground. Return to TornPDA and Resume explicitly.'); }, 200);
+            }
+            else {
+                if (mobileWasHidden && !mobileDeparting && ((_b = (_a = mobileWorker()) === null || _a === void 0 ? void 0 : _a.getState()) === null || _b === void 0 ? void 0 : _b.running))
+                    mobilePause('Phone left the foreground. Return to TornPDA and Resume explicitly.');
+                mobileWasHidden = false;
+            }
+        });
         // FF_TEST_EXPORT_POINT
     })();
 }

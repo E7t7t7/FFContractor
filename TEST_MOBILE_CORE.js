@@ -26,3 +26,16 @@ assert.throws(()=>core.validateSession({owner:1,remoteId:9,target:2},1,claim,now
 assert.equal(core.receipt([{id:4,attacker:{id:1},defender:{id:2},started:1000,ended:1002,result:'Lost'}],1,2,1000000,[])?.id,4);
 assert(!core.receipt([{id:4,attacker:{id:1},defender:{id:2},started:1000,ended:1002,result:'Lost'}],1,2,1000000,[4]));
 console.log('MOBILE CORE PASSED: optimal medical combinations, modifiers, six/nine-hour capacity, depletion, no-drug allowlist, receipt verification, claim identity/deadline and duplicate exclusion.');
+
+const navSession={owner:1,target:2,remoteId:9},navState={running:true,profileId:'1',orderId:'ff-mobile-9',targetId:'2',stage:'attack-open',navigationLastAt:now,navigationUrl:'https://www.torn.com/page.php?sid=attack&user2ID=2',sessionToken:'nav'};
+assert.equal(core.plannedNavigation(navState,navSession,now),navState.navigationUrl);
+assert(!core.plannedNavigation({...navState,profileId:'2'},navSession,now));
+assert(!core.plannedNavigation({...navState,stage:'fight'},navSession,now));
+assert(!core.plannedNavigation({...navState,navigationLastAt:now-30001},navSession,now));
+assert(!core.plannedNavigation({...navState,navigationUrl:'https://evil.example/page.php?sid=attack&user2ID=2'},navSession,now));
+const arrived={...navSession,departure:{to:navState.navigationUrl,owner:1,remoteId:9,token:'nav',at:now}};
+assert(core.navigationArrival(navState,arrived,navState.navigationUrl,now+1000));
+assert(!core.navigationArrival(navState,arrived,'https://www.torn.com/page.php?sid=attack&user2ID=3',now+1000));
+assert(!core.navigationArrival({...navState,sessionToken:'other'},arrived,navState.navigationUrl,now+1000));
+assert(!core.navigationArrival(navState,arrived,navState.navigationUrl,now+31000));
+console.log('MOBILE ROUTE GUARDS PASSED: exact owner/session/target, expected navigation stages, trusted origin, 30-second expiry and unrelated-arrival rejection.');

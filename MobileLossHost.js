@@ -5,7 +5,7 @@ function mobileSave(){setStore(MOBILE_STORE,mobile);}
 function mobileKey(){try{return sessionStorage.getItem(MOBILE_KEY)||'';}catch{return '';}}
 function mobileWorker(){return window.FFMobileLossCycle;}
 function mobileCount(){return mobile?Math.max(mobile.baseline+mobile.local.length,Number(mobile.providerDelivered)||0):0;}
-function mobilePause(reason){mobileStatus=String(reason);mobileWorker()?.pause();if(mobile){mobile.note=mobileStatus;mobileSave();}if(opened)render();}
+function mobilePause(reason){mobileWorker()?.pause(String(reason));mobileStatus=String(reason);if(mobile){mobile.note=mobileStatus;mobileSave();}if(opened)render();}
 async function mobileApi(route){
  const key=mobileKey();if(!isKey(key))throw Error('Enter the separate Torn API key again in Mobile Session; the phone session key is missing.');
  const wait=mobileLastApi+1500-Date.now();if(wait>0)await new Promise(r=>setTimeout(r,wait));mobileLastApi=Date.now();
@@ -141,12 +141,13 @@ async function startMobile(id){
 function mobileHtml(){
  const active=claims.find(c=>c.state==='active'),state=mobileWorker()?.getState(),owned=mobile&&mobile.seller===hash(apiKey);
  return '<h3>Phone-native loss session</h3><p class="ff-small">Runs on this phone, not your home PC. Keep TornPDA foreground and unlocked. Do not run this claim on another device. Automatic attacks/healing are contrary to Torn scripting rules.</p>'+
- '<div class="ff-card"><strong>'+esc(owned?mobileStatus:'Not started')+'</strong><div class="ff-small">'+(owned?mobileCount()+'/'+mobile.total+' tracked losses · '+Math.max(0,mobileCount()-mobile.baseline)+' locally recorded this session · '+Number(mobile.itemsUsed||0)+' medical items · '+Math.round(Number(mobile.cooldownUsed||0)/60)+' minutes added medical cooldown':'No mobile session for this seller account.')+'</div><div class="ff-row"><button data-action="mobile-pause">Pause</button><button data-action="mobile-resume">Resume</button><button data-action="mobile-stop">Stop</button></div></div>'+
+ '<div class="ff-card"><strong>'+esc(owned?mobileStatus:'Not started')+'</strong><div class="ff-small">'+(owned?mobileCount()+'/'+mobile.total+' tracked losses · '+Math.max(0,mobileCount()-mobile.baseline)+' locally recorded this session · '+Number(mobile.itemsUsed||0)+' medical items · '+Math.round(Number(mobile.cooldownUsed||0)/60)+' minutes added medical cooldown':'No mobile session for this seller account.')+'</div><div class="ff-row"><button data-action="mobile-pause">Pause</button><button data-action="mobile-resume">Resume</button><button data-action="mobile-stop">Stop</button><button data-action="mobile-diagnostic">Copy diagnostic</button></div></div>'+
  '<div class="ff-card"><label><input id="ff-mobile-home-off" type="checkbox"> I stopped home-PC execution for this claim</label><label>Separate Torn API key (this browser session only)<input id="ff-mobile-torn-key" type="password" autocomplete="off" placeholder="Identity, bars, cooldowns and perks access required"></label><label><input id="ff-mobile-heal" type="checkbox"> I permit automatic personal medical consumption</label><div class="ff-small">Drug use is permanently disabled. No blood bags or faction supplies.</div>'+FFMobileCore.meds.map(x=>'<label><input id="ff-mobile-item-'+x.id+'" type="checkbox" checked> '+esc(x.name)+'</label>').join('')+(active?'<button class="ff-primary" data-action="mobile-start" data-id="'+Number(active.id)+'">Start mobile loss loop</button>':'<p>No active claim. Refresh Contracts or reserve one first.</p>')+'</div>';
 }
 async function mobileAction(action,id){
  try{
   if(action==='mobile-start'){await startMobile(id);return;}
+  if(action==='mobile-diagnostic'){const value=JSON.stringify({version:VERSION,status:mobileStatus,note:mobile?.note||'',hasSellerKey:isKey(apiKey),hasTornKey:isKey(mobileKey()),foreground:!document.hidden,path:location.pathname,worker:mobileWorker()?.diagnostics?.()||null});try{await navigator.clipboard.writeText(value);notice='Mobile diagnostic copied.';}catch{window.prompt('Copy mobile diagnostic (no API keys)',value);}render();return;}
   if(!mobile||mobile.seller!==hash(apiKey))throw Error('No matching mobile session.');
   installMobileWorker();
   if(action==='mobile-pause')mobileWorker().pause();
@@ -158,6 +159,35 @@ async function mobileAction(action,id){
  }catch(error){errorText=mobileKey()?String(error.message||error).split(mobileKey()).join('[redacted]'):String(error.message||error);render();}
 }
 function restoreMobile(){
- const saved=getStore(MOBILE_STORE,null);if(!saved||saved.seller!==hash(apiKey))return;mobile=saved;const stale=Date.now()-Number(mobile.seenAt||0)>15000;installMobileWorker();if(stale&&mobileWorker()?.getState()?.running)mobilePause('Mobile session was interrupted. Review the page and Resume explicitly.');
+ const saved=getStore(MOBILE_STORE,null);if(!saved)return;
+ if(saved.seller!==hash(apiKey)){mobileStatus='Saved mobile session needs its owning seller key. Reconnect it to restore the worker.';errorText=mobileStatus;return;}
+ mobile=saved;const prior=getStore('__ff_mobile_loss_cycle_v1',null),arrival=FFMobileCore.navigationArrival(prior,mobile,location.href,Date.now()),stale=Date.now()-Number(mobile.seenAt||0)>15000;
+ // Restore a window marker only for a recent, exact, session-bound navigation.
+ if(arrival&&isKey(mobileKey())&&!sessionStorage.getItem('__ff_mobile_loss_cycle_session_v1'))sessionStorage.setItem('__ff_mobile_loss_cycle_session_v1',prior.sessionToken);
+ installMobileWorker();
+ if(!isKey(mobileKey())&&mobileWorker()?.getState()?.running)mobilePause('Torn API key did not survive this page change. Enter it in Mobile Session and Resume. No game action was authorized.');
+ else if(stale&&!arrival&&mobileWorker()?.getState()?.running)mobilePause('Mobile session was interrupted. Review the page and Resume explicitly.');
+ if(arrival){mobile.departure=null;mobile.seenAt=Date.now();mobileSave();}
 }
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&mobileWorker()?.getState()?.running)mobilePause('Phone left the foreground. Return to TornPDA and Resume explicitly.');});
+function mobileRestoreFailed(){
+ mobileStatus='Mobile session could not restart after navigation. Open Mobile Session and copy its diagnostic.';errorText=mobileStatus;loadState.done=false;render();
+}
+let mobileHideTimer=null,mobileWasHidden=!!document.hidden,mobileDeparting=false;
+window.addEventListener?.('pagehide',event=>{
+ if(!mobileWorker()?.getState()?.running)return;
+ const state=mobileWorker().getState(),to=FFMobileCore.plannedNavigation(state,mobile,Date.now());
+ if(to){mobileDeparting=true;clearTimeout(mobileHideTimer);mobile.departure={to,owner:mobile.owner,remoteId:mobile.remoteId,token:state.sessionToken,at:Date.now()};mobileSave();return;}
+ mobilePause('Torn page was closed or left outside the planned route. Resume explicitly.');
+});
+document.addEventListener('visibilitychange',()=>{
+ clearTimeout(mobileHideTimer);
+ if(document.hidden){
+  mobileWasHidden=true;
+  // Navigation may emit hidden before pagehide; defer the decision until the
+  // outgoing document can distinguish its planned route from backgrounding.
+  mobileHideTimer=setTimeout(()=>{if(document.hidden&&!mobileDeparting&&mobileWorker()?.getState()?.running)mobilePause('Phone left the foreground. Return to TornPDA and Resume explicitly.');},200);
+ }else{
+  if(mobileWasHidden&&!mobileDeparting&&mobileWorker()?.getState()?.running)mobilePause('Phone left the foreground. Return to TornPDA and Resume explicitly.');
+  mobileWasHidden=false;
+ }
+});

@@ -41,5 +41,21 @@ function validateSession(s,owner,claim,now){
  if(!deadline||deadline<=now)throw Error('The claim expired. No new attack authorized.');
  return deadline;
 }
-root.FFMobileCore={meds,plan,modifiers,verify,receipt,validateSession};
+function plannedNavigation(state,session,now){
+ if(!state?.running||!session||state.profileId!==String(session.owner)||state.orderId!=='ff-mobile-'+session.remoteId||Number(state.targetId)!==session.target||!['attack-open','heal-open','recovery-probe','final-recovery'].includes(state.stage))return null;
+ const age=now-Number(state.navigationLastAt);if(!Number.isFinite(age)||age<0||age>30000)return null;
+ try{
+  const url=new URL(state.navigationUrl);
+  if(url.protocol!=='https:'||url.hostname!=='www.torn.com'||url.port||url.username||url.password)return null;
+  if(url.pathname==='/item.php'&&state.stage==='heal-open')return url.href;
+  if(url.pathname==='/page.php'&&url.searchParams.get('sid')==='attack'&&Number(url.searchParams.get('user2ID'))===session.target&&state.stage!=='heal-open')return url.href;
+ }catch{}
+ return null;
+}
+function navigationArrival(state,session,actual,now){
+ const departure=session?.departure,expected=plannedNavigation(state,session,now);
+ if(!departure||!expected||departure.to!==expected||departure.owner!==session.owner||departure.remoteId!==session.remoteId||departure.token!==state.sessionToken||now-departure.at<0||now-departure.at>30000)return false;
+ try{const a=new URL(actual),b=new URL(expected);return a.origin===b.origin&&a.pathname===b.pathname&&(b.pathname==='/item.php'||a.searchParams.get('sid')==='attack'&&Number(a.searchParams.get('user2ID'))===session.target);}catch{return false;}
+}
+root.FFMobileCore={meds,plan,modifiers,verify,receipt,validateSession,plannedNavigation,navigationArrival};
 })(typeof module==='object'?module.exports:globalThis);

@@ -18,3 +18,8 @@ jobs:
       - run: node TEST_MOBILE_CORE.js
       - run: node TEST_MOBILE_HOST.js
       - run: node TEST_MOBILE_WORKER.js
+      - name: Install browser regression runtime
+        run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - run: node TEST_BROWSER_RENDER.js
+      - run: node TEST_MOBILE_NAVIGATION.js

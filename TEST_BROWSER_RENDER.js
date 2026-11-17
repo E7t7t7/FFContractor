@@ -14,7 +14,7 @@ const adapted=testSource.replace(/[“”]/g,'"').replace(/[‘’]/g,"'");
   await page.evaluate(adapted);
   assert(await page.locator('#ffcontractor-entry').isVisible(),'Inline entry not visible');
   const rect=await page.locator('#ffcontractor-entry').boundingBox();assert(rect.y>=0&&rect.y<100&&rect.width<=390,'Inline entry outside viewport');
-  assert((await page.locator('#ffcontractor-entry').innerText()).includes('0.9.5'));
+  assert((await page.locator('#ffcontractor-entry').innerText()).includes('0.9.6'));
   await page.locator('#ffcontractor-entry button').first().click();
   assert(await page.locator('#ffcontractor-panel').isVisible(),'Inline entry cannot open real panel');
   assert((await page.locator('#ffcontractor-panel').innerText()).includes('Add your FFScouter API key'));

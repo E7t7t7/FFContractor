@@ -6,6 +6,7 @@ core=(root/'MobileLossCore.js').read_text(encoding='utf8')
 worker=(root/'CommanderLossWorker.source.js').read_text(encoding='utf8')
 worker=worker.replace('__tcLossAutoInstalled','__ffMobileLossInstalled').replace('__tc_loss_auto_cycle','__ff_mobile_loss_cycle').replace('TornCommanderLossCycle','FFMobileLossCycle')
 worker=worker.replace("window.chrome?.webview?.postMessage(JSON.stringify(payload));","window.__FFMobileReceive?.(payload);")
+worker=worker.replace("    pause() {","    pause(reason) {").replace("pauseState(state, 'Paused from Torn Commander.', false);","pauseState(state, reason||'Paused from FFContractor Mobile.', false);")
 worker=worker.replace("  async function tick() {","  async function tick() {\n    if(document.hidden)return;")
 worker=worker.replace("    setAttackDelay(milliseconds) {","    recoverFromHospital(){const state=load();if(!state?.running||state.claimId)return false;state.pendingClaimRequest='';beginHealing(state);save(state);openPage(state,ITEMS_URL,'Items / Medical');return true;},\n    setAttackDelay(milliseconds) {")
 # Avoid TornPDA smart-quote rewriting turning punctuation inside JS strings into delimiters.

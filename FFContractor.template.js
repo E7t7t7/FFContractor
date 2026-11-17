@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FFScouter Loss Desk - Torn PDA
 // @namespace    https://ffscouter.com/
-// @version      0.9.5
+// @version      0.9.6
 // @description  FFScouter loss contracts in a lightweight TornPDA chat panel, with payouts and GitHub updates.
 // @homepageURL  https://github.com/E7t7t7/FFContractor
 // @downloadURL  https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js
@@ -19,7 +19,7 @@
 // Independent in-page entry point. No credentials or network during startup.
 (function(){
  'use strict';
- var version='0.9.5',old=window.__FFContractorBoot;
+ var version='0.9.6',old=window.__FFContractorBoot;
  if(old&&typeof old.dispose==='function')old.dispose();
  var stopped=false,failure='',stage='script entered',bar=document.createElement('div'),button=document.createElement('button'),info=document.createElement('button');
  bar.id='ffcontractor-entry';bar.setAttribute('data-ff-version',version);
@@ -57,7 +57,7 @@ try {
   'use strict';
   // Keep v0.7's proven plain-DOM launcher bootstrap and reinjection pattern.
   // Position recoverability is handled independently of FFScouter API startup.
-  const VERSION = '0.9.5';
+  const VERSION = '0.9.6';
   const ROOT_URL = 'https://raw.githubusercontent.com/E7t7t7/FFContractor/main/FFContractor.user.js';
   const API = 'https://ffscouter.com/api/v1/losses/seller';
   const ID = 'ffcontractor-launcher';
@@ -522,7 +522,7 @@ try {
     if(!isKey(key)){errorText='API key must be 16 letters/numbers.';render();return;}
     ownerPlayer=0;apiKey=key;remember=!!(panel.querySelector('#ff-remember')||{}).checked;
     setSession(key);activateLedger();if(remember)await nativeSet(KEY_STORAGE,key);else await nativeDelete(KEY_STORAGE);
-    try{const identity=await request('GET','/account/balance',null,'https://ffscouter.com/api/v1');ownerPlayer=positiveTornId(identity.player_id);}catch(_){}tab='Overview';await refresh();
+    try{const identity=await request('GET','/account/balance',null,'https://ffscouter.com/api/v1');ownerPlayer=positiveTornId(identity.player_id);}catch(_){}restoreMobile();tab='Overview';await refresh();
   }
   async function claim(order,max){
     const c=contracts.find(c=>String(c.order_number)===order);if(!c||busy)return;
@@ -626,11 +626,12 @@ try {
     const saved=await nativeGet(KEY_STORAGE,'');
     if(isKey(saved)){remember=true;if(!isKey(apiKey))apiKey=saved;}
     // Seller credentials are entered explicitly; never silently forward TornPDA's Torn key.
+    if(isKey(apiKey))setSession(apiKey);
     activateLedger();restoreMobile();
     render();
     if(isKey(apiKey)&&opened)void refresh();
   }
-  if(getStore('ff-mobile-loss-host-v1',null)&&getSession()){loadState.done=true;void loadState().catch(()=>{});}
+  if(getStore('ff-mobile-loss-host-v1',null)){loadState.done=true;void loadState().catch(mobileRestoreFailed);}
   launch.onclick=function(){
     if(Date.now()<suppressClickUntil)return;
     try{

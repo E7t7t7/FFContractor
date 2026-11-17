@@ -1,3 +1,11 @@
+## v0.9.6 — fix mobile navigation stopping the session
+- Reproduced v0.9.5 stopping during an ordinary Items → target page navigation: the outgoing document became hidden and the foreground handler persisted a Pause.
+- Planned navigation now carries a short-lived, exact account/claim/target/session handoff. It survives normal document replacement and back/forward-cache storage; switching away from the app or following another route still pauses.
+- Startup attempts to restore a saved mobile session even if its seller sessionStorage entry is missing, allowing the already remembered TornPDA seller key to be loaded. Missing credentials and restore failures now give actionable status.
+- Pause reasons are retained rather than replaced by generic text. Mobile Session now includes **Copy diagnostic**, containing state and credential-presence flags but no keys.
+- Regression evidence: real headless Edge document navigation failed before this change and passes after it, including both Items → Attack and Attack → Items plus a background-pause check. Unit tests also cover stale/foreign/incorrect routes and expected BFCache departures. CI now runs these browser checks.
+- Actual iPhone behavior remains unverified. If it still stops, copy the diagnostic from Mobile Session immediately after the target opens.
+
 ## v0.9.5 — phone-native loss sessions (experimental)
 Runs the loss worker inside TornPDA on the phone. It does **not** require or remotely control the home PC. Automatic game actions are contrary to Torn's scripting rules; this feature must not be described as compliant.
 
