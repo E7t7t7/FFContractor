@@ -10,3 +10,11 @@ jobs:
           node-version: '20'
       - run: node --check FFContractor.user.js
       - run: node TEST_FFCONTRACTOR.js
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python BUILD_MOBILE.py
+      - run: git diff --exit-code -- FFContractor.user.js
+      - run: node TEST_MOBILE_CORE.js
+      - run: node TEST_MOBILE_HOST.js
+      - run: node TEST_MOBILE_WORKER.js

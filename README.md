@@ -1,3 +1,30 @@
+## v0.9.5 — phone-native loss sessions (experimental)
+Runs the loss worker inside TornPDA on the phone. It does **not** require or remotely control the home PC. Automatic game actions are contrary to Torn's scripting rules; this feature must not be described as compliant.
+
+### Use
+1. Update the existing FFContractor userscript from its unchanged raw GitHub URL, then reopen Torn in TornPDA.
+2. Connect the owning account's FFScouter seller key and reserve/refresh an active loss claim.
+3. Open **Mobile Session**. Confirm the claim is not running on the home PC or another device.
+4. Enter a **separate Torn API key** for that same player. It needs access to profile, bars, cooldowns, perks and outgoing attacks. The seller key is not assumed interchangeable. The Torn key is retained in WebView sessionStorage, not Windows Credential Manager, not an iOS Keychain and not the exported ledger.
+5. If wanted, explicitly enable personal medical consumption and select Small First Aid Kit / First Aid Kit / Morphine. No drugs, blood bags or faction supplies can be selected.
+6. Equip a Pillow in Torn and press **Start mobile loss loop**. The session uses the active claim's remaining count. Pause, Resume and Stop are in the same tab.
+
+Keep TornPDA visible and the phone unlocked. Backgrounding pauses; a stale/interrupted session requires explicit Resume. iOS does not guarantee background JavaScript execution. This operates one logged-in account and one active claim at a time. Disable desktop home auto-execution before using mobile: there is no cross-device lock/PC acknowledgement service.
+
+### Behavior and boundaries
+- Reuses Commander's verified browser combat/item controls, repeated Pillow turns, challenge pause, navigation recovery and single-item dispatch safeguards.
+- Phone-side Torn API identity/energy/medical checks and FFScouter claim/deadline checks replace the C# host. Hospital races route to recovery rather than granting another fight.
+- Visible verified losses are locally tracked with replay-safe reservations; unclear terminal states need official attack receipts. Local/provisional progress is not provider-confirmed payment. Refresh FFScouter after the session; remote completion/settlement remains explicit.
+- Medical optimization compares combinations for minimum cooldown, uses reported perks, and verifies item quantity plus cooldown/hospital changes before another item. Unknown outcomes pause rather than re-clicking. Cooldown exhaustion pauses; drugs never enter the action list.
+- Starting the same claim again retains its locally recorded progress. An outstanding unverified medical use cannot be reset into a new session.
+- Existing launcher, payout history, raw update URL and standalone Commander compatibility are retained. The new mobile worker is disabled inside desktop WebView2; use its existing Loss Desk there.
+
+### Validation
+Passed TornPDA source-preprocessing and launcher fixtures, pure medical/identity/deadline tests, mocked phone host claim/medical lifecycle, the shared full browser-worker replay suite, and real headless Edge at a phone-sized viewport (including the new controls, consent gate and key-draft retention). **Actual iPhone operation and live fights/healing remain unverified.** No live claims, energy or medical items were used during development.
+
+### Maintenance
+Edit FFContractor.template.js / MobileLossHost.js / MobileLossCore.js, then run BUILD_MOBILE.py. CommanderLossWorker.source.js is the checked-in shared desktop worker snapshot. The build pins and verifies a TypeScript 5.9.3 compiler and emits ES2019 to retain older WebKit syntax compatibility; it checks TornPDA's smart-quote transformation. Generated FFContractor.user.js remains the public install/update file. CI verifies deterministic regeneration and runs host/core/worker tests.
+
 ## v0.9.4 — independent in-page entry and startup status
 The confirmed quote-normalization parse error was fixed in v0.9.3, but the user's iPhone still shows no floating launcher. The remaining device failure is not established; no claim is made that the desktop test reproduces it.
 
